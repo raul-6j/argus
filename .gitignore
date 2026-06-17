@@ -1,0 +1,43 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# --- Virtual environments ---
+venv/
+.venv/
+env/
+
+# --- Testing / coverage ---
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# --- Serialized models (Iron Law #5) ---
+models/*.pkl
+models/*.joblib
+models/latest/
+
+# --- Secrets / config ---
+.env
+*.env
+
+# --- Caches ---
+/tmp/tldextract_cache/
+.tldextract_cache/
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+
+# --- OS / editor ---
+.DS_Store
+.idea/
+.vscode/

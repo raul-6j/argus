@@ -1,0 +1,91 @@
+# ARGUS — Feature extraction configuration (scaffold)
+# Populated in Phase 2.
+
+# url_features:
+#   enabled: true
+
+# html_features:
+#   enabled: true
+#   parser: lxml        # lxml is ~3x faster than html.parser
+
+# whois_features:
+#   enabled: true
+#   timeout_ms: 500     # whois is slow — run in a thread pool
+
+# network_features:
+#   enabled: true
+#   reachability_check: true   # flag, never crash on dead URLs
+
+# --- Lexical feature priors -------------------------------------------------
+# Kept in config (not hardcoded) so each experiment can cite the exact list and
+# results stay reproducible. The lexical extractor falls back to built-in
+# defaults if this file is unavailable.
+suspicious_tlds:
+  - tk
+  - ml
+  - ga
+  - cf
+  - gq
+  - xyz
+  - top
+  - club
+  - work
+  - click
+
+suspicious_keywords:
+  - login
+  - verify
+  - secure
+  - update
+  - account
+
+# --- Model feature contract -------------------------------------------------
+# The trained model consumes features in EXACTLY this order. FeatureVector
+# .to_model_input() reads this list to build its numpy vector. Only numeric and
+# boolean features are listed; raw string categoricals (tld, domain, registrar,
+# ip_address, ip_country) require an encoding step that is not yet implemented.
+#
+# Bump model_version whenever this list changes so stored vectors can be checked
+# for compatibility.
+model_version: "0.1.0"
+
+feature_order:
+  # Tier 1 — lexical (always extracted)
+  - url_length
+  - hostname_length
+  - path_length
+  - num_dots_in_url
+  - num_dots_in_hostname
+  - num_subdomains
+  - has_ip_address
+  - has_at_symbol
+  - has_double_slash_redirect
+  - has_https
+  - has_port
+  - port_number
+  - is_suspicious_tld
+  - has_suspicious_keywords
+  - num_hyphens_in_hostname
+  - url_entropy
+  - digit_ratio_in_url
+  # Tier 4 — HTML / page content
+  - num_external_links
+  - num_internal_links
+  - num_forms
+  - has_password_field
+  - has_iframe
+  - has_hidden_elements
+  - num_images
+  - num_scripts
+  - has_favicon
+  - title_length
+  - meta_description_length
+  - page_text_length
+  - has_copyright
+  - external_link_ratio
+  # Tier 2/3 — domain intelligence (WHOIS + DNS)
+  - domain_age_days
+  - days_until_expiry
+  - is_recently_registered
+  - has_dns_a_record
+  - has_mx_record

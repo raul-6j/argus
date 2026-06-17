@@ -1,0 +1,19 @@
+# ARGUS — Model configuration (scaffold)
+# Populated in Phase 2. Keep all experiments reproducible: random_state=42.
+
+random_state: 42
+
+# data:
+#   train_path:
+#   test_size:
+
+# model:
+#   type:            # xgboost | lightgbm | random_forest
+#   params: {}
+
+# training:
+#   cv_folds:
+#   scoring:
+
+# output:
+#   model_dir: models/latest/
