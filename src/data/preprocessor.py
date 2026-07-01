@@ -149,11 +149,79 @@ def drop_high_null_columns(
     return df, to_drop
 
 
+def fit_imputer(train_df: pd.DataFrame, strategy: str = "mode") -> dict[str, object]:
+    """Compute per-column fill values from the training set only.
+
+    Call this on the training split, then pass the result to
+    :func:`apply_imputer` for the validation and test splits.
+    This prevents imputation leakage (TD-3): val/test statistics must not
+    influence the fill values seen during training.
+
+    Args:
+        train_df: Training split DataFrame (label column excluded from fit).
+        strategy: Only ``"mode"`` is supported — all ARGUS features are
+            categorical integers (-1/0/1) so mode is the correct fill.
+
+    Returns:
+        Dict mapping column name → fill value, covering only columns that
+        have at least one null in ``train_df``. Columns with no nulls are
+        omitted (no fill needed).
+
+    Raises:
+        ValueError: If ``strategy`` is not ``"mode"``.
+    """
+    if strategy != "mode":
+        raise ValueError(f"Unsupported impute strategy '{strategy}'. Use 'mode'.")
+
+    feature_cols = [c for c in train_df.columns if c != "label"]
+    null_cols = [c for c in feature_cols if train_df[c].isnull().any()]
+    fill_values: dict[str, object] = {}
+    for col in null_cols:
+        mode_series = train_df[col].mode(dropna=True)
+        fill_values[col] = mode_series.iloc[0] if len(mode_series) > 0 else 0
+        logger.info("Imputer fit: '%s' → mode=%s (from train set)", col, fill_values[col])
+    return fill_values
+
+
+def apply_imputer(
+    df: pd.DataFrame, fill_values: dict[str, object]
+) -> pd.DataFrame:
+    """Apply pre-fitted fill values to a DataFrame.
+
+    Uses fill values computed by :func:`fit_imputer` on the training set.
+    Safe to call on train, val, and test splits — always uses training-set
+    statistics, never the split's own statistics.
+
+    Args:
+        df: DataFrame to impute. Columns absent from ``fill_values`` are left
+            unchanged (no nulls expected, or not a feature column).
+        fill_values: Dict from :func:`fit_imputer`.
+
+    Returns:
+        Copy of ``df`` with nulls in ``fill_values`` columns filled.
+    """
+    if not fill_values:
+        logger.info("No nulls to impute.")
+        return df
+
+    df = df.copy()
+    for col, fill_val in fill_values.items():
+        if col not in df.columns:
+            continue
+        n_filled = int(df[col].isnull().sum())
+        if n_filled > 0:
+            df[col] = df[col].fillna(fill_val)
+            logger.info("Imputed %d nulls in '%s' with mode=%s", n_filled, col, fill_val)
+    return df
+
+
 def impute_missing(df: pd.DataFrame, strategy: str = "mode") -> pd.DataFrame:
     """Fill remaining nulls using ``strategy`` per column.
 
-    All ARGUS features are categorical integers (-1/0/1), so mode imputation
-    is correct. Mean/median would introduce non-integer values.
+    .. deprecated::
+        Use :func:`fit_imputer` + :func:`apply_imputer` instead to avoid
+        imputation leakage (TD-3). This function computes fill values from
+        ``df`` itself, which is safe only when ``df`` is the training split.
 
     Args:
         df: Input DataFrame (label column excluded from imputation).
@@ -163,25 +231,8 @@ def impute_missing(df: pd.DataFrame, strategy: str = "mode") -> pd.DataFrame:
     Returns:
         DataFrame with no remaining nulls in feature columns.
     """
-    feature_cols = [c for c in df.columns if c != "label"]
-    null_cols = [c for c in feature_cols if df[c].isnull().any()]
-
-    if not null_cols:
-        logger.info("No nulls to impute.")
-        return df
-
-    df = df.copy()
-    for col in null_cols:
-        if strategy == "mode":
-            fill_val = df[col].mode(dropna=True)
-            fill_val = fill_val.iloc[0] if len(fill_val) > 0 else 0
-        else:
-            raise ValueError(f"Unsupported impute strategy '{strategy}'. Use 'mode'.")
-        n_filled = int(df[col].isnull().sum())
-        df[col] = df[col].fillna(fill_val)
-        logger.info("Imputed %d nulls in '%s' with mode=%s", n_filled, col, fill_val)
-
-    return df
+    fill_values = fit_imputer(df, strategy=strategy)
+    return apply_imputer(df, fill_values)
 
 
 # ---------------------------------------------------------------------------

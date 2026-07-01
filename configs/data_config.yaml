@@ -42,37 +42,41 @@ labels:
 # All values are categorical: -1/0/1 (pre-thresholded by original authors)
 # ---------------------------------------------------------------------------
 uci_rename:
-  having_IP_Address: "has_ip_address"
-  URL_Length: "url_length_cat"          # -1: >75 chars, 0: 54-75, 1: <54
-  Shortining_Service: "has_shortening"
-  having_At_Symbol: "has_at_symbol"
+  # ucimlrepo normalises UCI column names to lowercase at download time.
+  # Original mixed-case names (e.g. "having_IP_Address") are NOT used.
+  having_ip_address: "has_ip_address"
+  url_length: "url_length_cat"          # -1: >75 chars, 0: 54-75, 1: <54
+  shortining_service: "has_shortening"
+  having_at_symbol: "has_at_symbol"
   double_slash_redirecting: "has_double_slash"
-  Prefix_Suffix: "has_prefix_suffix"
-  having_Sub_Domain: "subdomain_level"  # -1: many, 0: some, 1: none
-  SSLfinal_State: "ssl_state"           # -1: no HTTPS, 0: self-signed, 1: trusted CA
-  Domain_registeration_length: "domain_reg_length"
-  Favicon: "has_favicon"
+  prefix_suffix: "has_prefix_suffix"
+  having_sub_domain: "subdomain_level"  # -1: many, 0: some, 1: none
+  sslfinal_state: "ssl_state"           # -1: no HTTPS, 0: self-signed, 1: trusted CA
+  domain_registration_length: "domain_reg_length"
+  favicon: "has_favicon"
   port: "has_port"
-  HTTPS_token: "https_in_domain"
-  Request_URL: "request_url_ratio"      # ratio of external resource URLs
-  URL_of_Anchor: "anchor_url_ratio"
-  Links_in_tags: "links_in_tags"
-  SFH: "server_form_handler"
-  Submitting_to_email: "submits_to_email"
-  Abnormal_URL: "is_abnormal_url"
-  Redirect: "has_redirect"
+  https_token: "https_in_domain"
+  request_url: "request_url_ratio"      # ratio of external resource URLs
+  url_of_anchor: "anchor_url_ratio"
+  links_in_tags: "links_in_tags"
+  sfh: "server_form_handler"
+  submitting_to_email: "submits_to_email"
+  abnormal_url: "is_abnormal_url"
+  redirect: "has_redirect"
   on_mouseover: "has_onmouseover"
-  RightClick: "right_click_disabled"
-  popUpWidnow: "has_popup"
-  Iframe: "has_iframe"
+  rightclick: "right_click_disabled"
+  popupwindow: "has_popup"
+  iframe: "has_iframe"
   age_of_domain: "domain_age_cat"       # -1: <6 months, 0: 6-12 months, 1: >12 months
-  DNSRecord: "has_dns_record"
+  dnsrecord: "has_dns_record"
   web_traffic: "web_traffic"
-  Page_Rank: "page_rank"
-  Google_Index: "google_indexed"
-  Links_pointing_to_page: "inbound_links"
-  Statistical_report: "in_statistical_report"
-  Result: "label"
+  page_rank: "page_rank"
+  google_index: "google_indexed"
+  links_pointing_to_page: "inbound_links"
+  statistical_report: "in_statistical_report"
+  # "result" is consumed by normalise_labels (→ "label") before rename_columns runs.
+  # Pass "label" through so rename_columns keeps it in the output column set.
+  label: "label"
 
 # ---------------------------------------------------------------------------
 # Kaggle feature rename map

@@ -36,15 +36,17 @@ class DataValidationError(ValueError):
 # UCI loader
 # ---------------------------------------------------------------------------
 
-# Expected UCI columns (30 features + label).
+# Expected UCI columns (30 features + label) — lowercase as returned by ucimlrepo.
+# Note: original UCI column names used mixed case (e.g. "having_IP_Address") but
+# ucimlrepo normalises them to lowercase at download time.
 _UCI_REQUIRED_COLS: set[str] = {
-    "having_IP_Address", "URL_Length", "Shortining_Service", "having_At_Symbol",
-    "double_slash_redirecting", "Prefix_Suffix", "having_Sub_Domain", "SSLfinal_State",
-    "Domain_registeration_length", "Favicon", "port", "HTTPS_token", "Request_URL",
-    "URL_of_Anchor", "Links_in_tags", "SFH", "Submitting_to_email", "Abnormal_URL",
-    "Redirect", "on_mouseover", "RightClick", "popUpWidnow", "Iframe", "age_of_domain",
-    "DNSRecord", "web_traffic", "Page_Rank", "Google_Index", "Links_pointing_to_page",
-    "Statistical_report", "Result",
+    "having_ip_address", "url_length", "shortining_service", "having_at_symbol",
+    "double_slash_redirecting", "prefix_suffix", "having_sub_domain", "sslfinal_state",
+    "domain_registration_length", "favicon", "port", "https_token", "request_url",
+    "url_of_anchor", "links_in_tags", "sfh", "submitting_to_email", "abnormal_url",
+    "redirect", "on_mouseover", "rightclick", "popupwindow", "iframe", "age_of_domain",
+    "dnsrecord", "web_traffic", "page_rank", "google_index", "links_pointing_to_page",
+    "statistical_report", "result",
 }
 _UCI_EXPECTED_ROWS: int = 11_055
 _UCI_ROW_TOLERANCE: int = 50  # allow ±50 rows across dataset versions
@@ -166,7 +168,7 @@ def normalise_labels(
     source: Literal["uci", "kaggle"],
     *,
     suspicious_policy: SuspiciousPolicy = "merge_phishing",
-    uci_label_col: str = "Result",
+    uci_label_col: str = "result",
     kaggle_label_col: str = "status",
     kaggle_phishing_raw: str = "phishing",
     kaggle_legit_raw: str = "legitimate",

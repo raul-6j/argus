@@ -39,11 +39,12 @@ from src.data.loaders import (  # noqa: E402
 )
 from src.data.preprocessor import (  # noqa: E402
     align_schemas,
+    apply_imputer,
     audit_missing,
     compute_dataset_stats,
     drop_duplicates,
     drop_high_null_columns,
-    impute_missing,
+    fit_imputer,
     merge_datasets,
     rename_columns,
     save_splits,
@@ -242,31 +243,32 @@ def _parquet_available() -> bool:
 # ---------------------------------------------------------------------------
 
 
-def run_pipeline(config: dict) -> None:
+def run_pipeline(config: dict, uci_only: bool = False) -> None:
     """Execute the full data preparation pipeline.
 
     Steps:
-        1. Load + validate UCI and Kaggle CSVs
+        1. Load + validate UCI CSV (and Kaggle CSV unless uci_only=True)
         2. Normalise labels (apply suspicious-class policy)
         3. Rename columns to internal names
         4. Align schemas (fill missing cols with NaN)
-        5. Merge into one DataFrame
+        5. Merge datasets (or use UCI only)
         6. Drop exact duplicates
         7. Missing-value audit + high-null column drop
-        8. Mode imputation for remaining nulls
-        9. Stratified 70/15/15 split
+        8. Stratified 70/15/15 split  ← split BEFORE imputation (TD-3 fix)
+        9. Fit mode imputer on train split only, apply to val + test
         10. Persist raw features to parquet/csv
         11. Write dataset_stats.json
 
-    **Leakage guard:** No scaler or imputer is fit here. The imputer in
-    step 8 uses only the training set's mode values — actually it uses the
-    full pre-split dataset's mode, which is an acceptable approximation for
-    mode (not mean/variance). For full correctness, imputation is re-fit
-    inside the sklearn Pipeline at training time using training data only.
-    The data written here is raw (unscaled, mode-imputed for NaNs only).
+    **Leakage guard (TD-3):** Imputation statistics are computed on the
+    training split only (step 9), then applied to val and test. This prevents
+    val/test statistics from leaking into the fill values used during training.
+    No scaler is fit here — StandardScaler lives inside the sklearn Pipeline
+    at training time.
 
     Args:
         config: Parsed data_config.yaml dict.
+        uci_only: If True, skip Kaggle loading and train on UCI alone.
+            Use this when Kaggle credentials are not yet configured.
     """
     label_cfg = config["labels"]
     suspicious_policy = label_cfg["suspicious_class_policy"]
@@ -286,10 +288,18 @@ def run_pipeline(config: dict) -> None:
     logger.info("=" * 60)
 
     uci_raw = load_uci(PROJECT_ROOT / config["paths"]["uci_csv"])
-    kaggle_raw = load_kaggle(
-        PROJECT_ROOT / config["paths"]["kaggle_csv"],
-        label_col=label_cfg["kaggle_label_col"],
-    )
+
+    if uci_only:
+        logger.warning(
+            "Running in UCI-only mode. Kaggle dataset skipped. "
+            "Re-run without --uci-only once kaggle.json is configured."
+        )
+        kaggle_raw = None
+    else:
+        kaggle_raw = load_kaggle(
+            PROJECT_ROOT / config["paths"]["kaggle_csv"],
+            label_col=label_cfg["kaggle_label_col"],
+        )
 
     # ------------------------------------------------------------------
     # Step 2: Normalise labels
@@ -303,13 +313,17 @@ def run_pipeline(config: dict) -> None:
         source="uci",
         suspicious_policy=suspicious_policy,
     )
-    kaggle_normed = normalise_labels(
-        kaggle_raw,
-        source="kaggle",
-        kaggle_label_col=label_cfg["kaggle_label_col"],
-        kaggle_phishing_raw=label_cfg["kaggle_phishing_raw"],
-        kaggle_legit_raw=label_cfg["kaggle_legit_raw"],
-    )
+
+    if kaggle_raw is not None:
+        kaggle_normed = normalise_labels(
+            kaggle_raw,
+            source="kaggle",
+            kaggle_label_col=label_cfg["kaggle_label_col"],
+            kaggle_phishing_raw=label_cfg["kaggle_phishing_raw"],
+            kaggle_legit_raw=label_cfg["kaggle_legit_raw"],
+        )
+    else:
+        kaggle_normed = None
 
     # ------------------------------------------------------------------
     # Step 3: Rename columns to internal names
@@ -319,10 +333,13 @@ def run_pipeline(config: dict) -> None:
     logger.info("=" * 60)
 
     uci_renamed = rename_columns(uci_normed, config["uci_rename"])
-    kaggle_renamed = rename_columns(kaggle_normed, config["kaggle_rename"])
-
     logger.info("UCI after rename: %d cols", len(uci_renamed.columns))
-    logger.info("Kaggle after rename: %d cols", len(kaggle_renamed.columns))
+
+    if kaggle_normed is not None:
+        kaggle_renamed = rename_columns(kaggle_normed, config["kaggle_rename"])
+        logger.info("Kaggle after rename: %d cols", len(kaggle_renamed.columns))
+    else:
+        kaggle_renamed = None
 
     # ------------------------------------------------------------------
     # Step 4: Align schemas
@@ -331,16 +348,30 @@ def run_pipeline(config: dict) -> None:
     logger.info("STEP 4: Align schemas to %d-feature contract", len(feature_columns))
     logger.info("=" * 60)
 
-    uci_aligned, kaggle_aligned = align_schemas(uci_renamed, kaggle_renamed, feature_columns)
+    if kaggle_renamed is not None:
+        uci_aligned, kaggle_aligned = align_schemas(uci_renamed, kaggle_renamed, feature_columns)
+    else:
+        # UCI-only: align UCI alone against the feature contract
+        import pandas as _pd  # noqa: PLC0415
+        dummy_kaggle = _pd.DataFrame(columns=feature_columns + ["label"])
+        uci_aligned, _ = align_schemas(uci_renamed, dummy_kaggle, feature_columns)
+        kaggle_aligned = None
 
     # ------------------------------------------------------------------
     # Step 5: Merge
     # ------------------------------------------------------------------
     logger.info("=" * 60)
-    logger.info("STEP 5: Merge UCI + Kaggle")
+    if kaggle_aligned is not None:
+        logger.info("STEP 5: Merge UCI + Kaggle")
+    else:
+        logger.info("STEP 5: UCI-only mode — skipping merge")
     logger.info("=" * 60)
 
-    merged = merge_datasets(uci_aligned, kaggle_aligned)
+    if kaggle_aligned is not None:
+        merged = merge_datasets(uci_aligned, kaggle_aligned)
+    else:
+        merged = uci_aligned.reset_index(drop=True)
+        logger.info("UCI-only: %d rows", len(merged))
 
     # ------------------------------------------------------------------
     # Step 6: Drop duplicates
@@ -366,26 +397,10 @@ def run_pipeline(config: dict) -> None:
     merged, dropped_cols = drop_high_null_columns(merged, max_null_rate=max_null_rate)
 
     # ------------------------------------------------------------------
-    # Step 8: Impute remaining nulls
+    # Step 8: Stratified split  ← BEFORE imputation (TD-3 fix)
     # ------------------------------------------------------------------
     logger.info("=" * 60)
-    logger.info("STEP 8: Impute remaining nulls (strategy=%s)", impute_strategy)
-    logger.info("=" * 60)
-
-    merged = impute_missing(merged, strategy=impute_strategy)
-
-    # Final null check
-    remaining_nulls = int(merged.isnull().sum().sum())
-    if remaining_nulls > 0:
-        logger.error("LEAKAGE GUARD: %d nulls remain after imputation!", remaining_nulls)
-        sys.exit(1)
-    logger.info("Post-imputation null check passed: 0 nulls.")
-
-    # ------------------------------------------------------------------
-    # Step 9: Stratified split
-    # ------------------------------------------------------------------
-    logger.info("=" * 60)
-    logger.info("STEP 9: Stratified split (%.0f/%.0f/%.0f)",
+    logger.info("STEP 8: Stratified split (%.0f/%.0f/%.0f) — BEFORE imputation",
                 split_cfg["train_ratio"] * 100,
                 split_cfg["val_ratio"] * 100,
                 split_cfg["test_ratio"] * 100)
@@ -398,6 +413,30 @@ def run_pipeline(config: dict) -> None:
         test_ratio=split_cfg["test_ratio"],
         random_state=split_cfg["random_state"],
     )
+
+    # ------------------------------------------------------------------
+    # Step 9: Fit imputer on train only, apply to val + test (TD-3 fix)
+    # ------------------------------------------------------------------
+    logger.info("=" * 60)
+    logger.info("STEP 9: Impute nulls — fit on train only, apply to val + test (strategy=%s)",
+                impute_strategy)
+    logger.info("=" * 60)
+
+    fill_values = fit_imputer(train_df, strategy=impute_strategy)
+    train_df = apply_imputer(train_df, fill_values)
+    val_df = apply_imputer(val_df, fill_values)
+    test_df = apply_imputer(test_df, fill_values)
+
+    # Final null check across all splits
+    for split_name, split_df in [("train", train_df), ("val", val_df), ("test", test_df)]:
+        remaining_nulls = int(split_df.isnull().sum().sum())
+        if remaining_nulls > 0:
+            logger.error(
+                "LEAKAGE GUARD: %d nulls remain in %s after imputation!",
+                remaining_nulls, split_name,
+            )
+            sys.exit(1)
+    logger.info("Post-imputation null check passed: 0 nulls across all splits.")
 
     # ------------------------------------------------------------------
     # Step 10: Persist splits (raw features — no scaler)
@@ -485,6 +524,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=False,
         help="Skip download step (CSVs must already exist in data/raw/).",
     )
+    parser.add_argument(
+        "--uci-only",
+        action="store_true",
+        default=False,
+        help=(
+            "Run pipeline with UCI dataset only (skip Kaggle). "
+            "Use when kaggle.json is not yet configured. "
+            "Re-run without this flag once Kaggle credentials are set up."
+        ),
+    )
     return parser
 
 
@@ -496,17 +545,20 @@ def main() -> None:
     config = load_config(Path(args.config) if not Path(args.config).is_absolute()
                          else args.config)
 
+    uci_only: bool = getattr(args, "uci_only", False)
+
     # ── Download step ──────────────────────────────────────────────────
     if not args.no_download:
         logger.info("Starting download step ...")
         download_uci(config)
-        download_kaggle(config)
+        if not uci_only:
+            download_kaggle(config)
         if args.download:
             logger.info("Download complete. Re-run without --download to run the pipeline.")
             return
 
     # ── Prep step ──────────────────────────────────────────────────────
-    run_pipeline(config)
+    run_pipeline(config, uci_only=uci_only)
 
 
 if __name__ == "__main__":

@@ -25,15 +25,15 @@ from src.data.loaders import (
 # Fixtures — minimal inline DataFrames, no real files
 # ---------------------------------------------------------------------------
 
-# All 31 UCI columns (30 features + Result)
+# All 31 UCI columns (30 features + result) — lowercase as returned by ucimlrepo.
 _UCI_FEATURE_COLS = [
-    "having_IP_Address", "URL_Length", "Shortining_Service", "having_At_Symbol",
-    "double_slash_redirecting", "Prefix_Suffix", "having_Sub_Domain", "SSLfinal_State",
-    "Domain_registeration_length", "Favicon", "port", "HTTPS_token", "Request_URL",
-    "URL_of_Anchor", "Links_in_tags", "SFH", "Submitting_to_email", "Abnormal_URL",
-    "Redirect", "on_mouseover", "RightClick", "popUpWidnow", "Iframe", "age_of_domain",
-    "DNSRecord", "web_traffic", "Page_Rank", "Google_Index", "Links_pointing_to_page",
-    "Statistical_report",
+    "having_ip_address", "url_length", "shortining_service", "having_at_symbol",
+    "double_slash_redirecting", "prefix_suffix", "having_sub_domain", "sslfinal_state",
+    "domain_registration_length", "favicon", "port", "https_token", "request_url",
+    "url_of_anchor", "links_in_tags", "sfh", "submitting_to_email", "abnormal_url",
+    "redirect", "on_mouseover", "rightclick", "popupwindow", "iframe", "age_of_domain",
+    "dnsrecord", "web_traffic", "page_rank", "google_index", "links_pointing_to_page",
+    "statistical_report",
 ]
 
 
@@ -43,7 +43,7 @@ def _make_uci_df(n: int = 11_055, labels: list[int] | None = None) -> pd.DataFra
         # Distribute -1 (phishing), 0 (suspicious), 1 (legit)
         labels = [-1] * (n // 2) + [0] * (n // 10) + [1] * (n - n // 2 - n // 10)
     data = {col: [1] * len(labels) for col in _UCI_FEATURE_COLS}
-    data["Result"] = labels
+    data["result"] = labels
     return pd.DataFrame(data)
 
 
@@ -66,17 +66,17 @@ class TestLoadUci:
         result = load_uci(path)
         assert isinstance(result, pd.DataFrame)
         assert len(result) == 11_055
-        assert "Result" in result.columns
+        assert "result" in result.columns
 
     def test_returns_all_31_columns(self):
         df = _make_uci_df()
         path = _write_csv(df)
         result = load_uci(path)
-        assert set(_UCI_FEATURE_COLS + ["Result"]).issubset(set(result.columns))
+        assert set(_UCI_FEATURE_COLS + ["result"]).issubset(set(result.columns))
 
     def test_missing_column_raises(self):
         df = _make_uci_df()
-        df = df.drop(columns=["having_IP_Address", "Iframe"])
+        df = df.drop(columns=["having_ip_address", "iframe"])
         path = _write_csv(df)
         with pytest.raises(DataValidationError, match="missing required columns"):
             load_uci(path)
@@ -151,30 +151,30 @@ class TestLoadKaggle:
 
 class TestNormaliseLabelsUci:
     def test_phishing_maps_to_1(self):
-        df = pd.DataFrame({"Result": [-1, -1, 1], "feature_a": [0, 0, 0]})
+        df = pd.DataFrame({"result": [-1, -1, 1], "feature_a": [0, 0, 0]})
         result = normalise_labels(df, "uci")
         assert all(result.loc[result.index[:2], "label"] == LABEL_PHISHING)
 
     def test_legit_maps_to_0(self):
-        df = pd.DataFrame({"Result": [1, 1], "feature_a": [0, 0]})
+        df = pd.DataFrame({"result": [1, 1], "feature_a": [0, 0]})
         result = normalise_labels(df, "uci")
         assert all(result["label"] == LABEL_LEGIT)
 
     def test_suspicious_merge_policy_maps_to_phishing(self):
-        df = pd.DataFrame({"Result": [0, 0, 0], "feature_a": [0, 0, 0]})
+        df = pd.DataFrame({"result": [0, 0, 0], "feature_a": [0, 0, 0]})
         result = normalise_labels(df, "uci", suspicious_policy="merge_phishing")
         assert all(result["label"] == LABEL_PHISHING)
 
     def test_suspicious_drop_policy_removes_rows(self):
-        df = pd.DataFrame({"Result": [-1, 0, 1, 0, -1], "feature_a": [0] * 5})
+        df = pd.DataFrame({"result": [-1, 0, 1, 0, -1], "feature_a": [0] * 5})
         result = normalise_labels(df, "uci", suspicious_policy="drop")
         assert len(result) == 3
         assert set(result["label"].unique()).issubset({LABEL_PHISHING, LABEL_LEGIT})
 
     def test_original_label_column_dropped(self):
-        df = pd.DataFrame({"Result": [-1, 1], "feature_a": [0, 0]})
+        df = pd.DataFrame({"result": [-1, 1], "feature_a": [0, 0]})
         result = normalise_labels(df, "uci")
-        assert "Result" not in result.columns
+        assert "result" not in result.columns
         assert "label" in result.columns
 
     def test_no_unexpected_label_values(self):
@@ -183,7 +183,7 @@ class TestNormaliseLabelsUci:
         assert set(result["label"].unique()).issubset({LABEL_PHISHING, LABEL_LEGIT})
 
     def test_invalid_suspicious_policy_raises(self):
-        df = pd.DataFrame({"Result": [-1], "feature_a": [0]})
+        df = pd.DataFrame({"result": [-1], "feature_a": [0]})
         with pytest.raises(ValueError, match="suspicious_policy"):
             normalise_labels(df, "uci", suspicious_policy="third_class")  # type: ignore[arg-type]
 
