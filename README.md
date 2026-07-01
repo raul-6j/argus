@@ -36,7 +36,9 @@ argus/
   configs/      # model_config.yaml, feature_config.yaml
   models/       # Serialized models (git-ignored)
   notebooks/    # Jupyter notebooks for EDA
-  docs/         # thesis/ chapter drafts
+  docs/         # architecture, decisions, experiments, dev guides
+    reports/    # interim reports, project proposal
+    thesis/     # chapter drafts
 ```
 
 ## Setup

@@ -34,6 +34,16 @@ models/latest/
 /tmp/tldextract_cache/
 .tldextract_cache/
 
+# --- Data files (raw downloads and processed splits — never commit large datasets) ---
+data/raw/*.csv
+data/raw/*.arff
+data/processed/*.parquet
+data/processed/*.csv
+data/processed/*.json
+# Keep gitkeep markers:
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
 # --- Jupyter ---
 .ipynb_checkpoints/
 

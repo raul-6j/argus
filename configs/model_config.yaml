@@ -1,5 +1,6 @@
-# ARGUS — Model configuration (scaffold)
-# Populated in Phase 2. Keep all experiments reproducible: random_state=42.
+# ARGUS — Model configuration
+# TODO (Phase 5, Task 5.1): fill in all sections below for DT / RF / LR / SVM experiments.
+# Keep all experiments reproducible: random_state=42.
 
 random_state: 42
 
@@ -8,7 +9,7 @@ random_state: 42
 #   test_size:
 
 # model:
-#   type:            # xgboost | lightgbm | random_forest
+#   type:            # decision_tree | random_forest | logistic_regression | svm
 #   params: {}
 
 # training:

@@ -21,6 +21,12 @@ Flask==3.0.3
 # --- Serialization / config ---
 joblib==1.4.2
 PyYAML==6.0.2
+pyarrow>=16.0.0         # Parquet serialisation for data/processed/ splits
+
+# --- Data pipeline ---
+ucimlrepo>=0.0.7        # Programmatic UCI ML Repository download
+kaggle>=1.6.17          # Kaggle CLI for dataset downloads (requires ~/.kaggle/kaggle.json)
+pandas>=2.2.0           # Core data manipulation
 
 # --- Testing ---
 pytest==8.3.3
