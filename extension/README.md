@@ -88,7 +88,8 @@ published `.crx`, which is out of scope for this anonymous MVP build.)
 ```bash
 cd extension
 npm install
-npm test
+npm test    # vitest
+npm run lint  # eslint
 ```
 
 Tests cover `lib/urlUtils.js` and `lib/apiClient.js` (chrome.storage/fetch
