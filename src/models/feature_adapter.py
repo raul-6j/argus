@@ -1,23 +1,27 @@
-"""Live-extractor -> training-contract adapter (DEC-015).
+"""Live-extractor -> training-contract adapter (DEC-015, DEC-016).
 
 ``src/features/pipeline.py`` produces a live URL's raw signals (Tier 1
 lexical, Tier 4 HTML, Tier 2/3 domain intelligence). The trained model
-consumes a different, UCI-scaled 22-feature contract
+consumes a different, UCI-scaled 18-feature contract
 (:data:`src.models.contract.FEATURE_ORDER`). This module bridges the two —
 see the feature-space-schism note in project memory for why they're
 different in the first place.
 
-18 of the 22 trained features have a live derivation (direct, or bucketed
-onto UCI's ``-1/0/1`` scale using the same published/empirically-verified
-thresholds as ``src.data.preprocessor.bucket_kaggle_scale`` — DEC-014). The
-remaining 4 (``web_traffic``, ``page_rank``, ``google_indexed``,
-``in_statistical_report``) have no live equivalent — they were Alexa/Google
-PageRank-era signals (dead in 2026) or require a live third-party blocklist
-API not in scope. Those are stubbed with the UCI training set's mode value
-(the same "best single guess" principle as
-``src.data.preprocessor.fit_imputer``) and always reported in
-``ModelInput.approximated`` so a caller can log/monitor how much of a given
-prediction relied on unavailable signal, rather than silently degrading.
+Every one of the 18 trained features now has a genuine live derivation
+(direct, or bucketed onto UCI's ``-1/0/1`` scale using the same
+published/empirically-verified thresholds as
+``src.data.preprocessor.bucket_kaggle_scale`` — DEC-014). DEC-015 originally
+built this adapter over a 22-feature contract with 4 stubbed dead signals
+(``web_traffic``, ``page_rank``, ``google_indexed``, ``in_statistical_report``
+— Alexa/Google PageRank-era signals, dead in 2026, or requiring an
+unavailable third-party blocklist API); feature-importance analysis
+(``docs/EXPERIMENTS.md`` Run 1) showed the trained model relying heavily on
+exactly those stubbed features, meaning its benchmark accuracy did not
+reflect real deployed accuracy. DEC-016 dropped them from the training
+contract entirely rather than keep stubbing them — same reasoning as
+DEC-013's original 8 dropped features. ``ModelInput.approximated`` is still
+populated (and should stay empty in the normal case) if any live tier fails
+to run and a feature falls back to its missing-input default.
 """
 
 from __future__ import annotations
@@ -28,16 +32,6 @@ from typing import Any, Callable, Optional
 from src.models.contract import FEATURE_ORDER, ModelInput
 
 logger = logging.getLogger(__name__)
-
-# Mode value from the UCI training distribution (uci_phishing.csv, verified
-# 2 Jul 2026) for the 4 features with no live-extractor equivalent. See
-# module docstring and DEC-015.
-_STUB_VALUES: dict[str, int] = {
-    "web_traffic": 1,  # mode: 5,831/11,055 rows
-    "page_rank": -1,  # mode: 8,201/11,055 rows
-    "google_indexed": 1,  # mode: 9,516/11,055 rows
-    "in_statistical_report": 1,  # mode: 9,505/11,055 rows
-}
 
 
 def _bool_to_scale(value: Optional[bool], *, true_is_phishing: bool) -> int:
@@ -189,16 +183,12 @@ _DERIVATIONS: dict[str, tuple[Callable[[dict[str, Any]], int], tuple[str, ...]]]
         lambda f: _bool_to_scale(f.get("has_dns_a_record"), true_is_phishing=False),
         ("has_dns_a_record",),
     ),
-    "web_traffic": (lambda f: _STUB_VALUES["web_traffic"], ()),
-    "page_rank": (lambda f: _STUB_VALUES["page_rank"], ()),
-    "google_indexed": (lambda f: _STUB_VALUES["google_indexed"], ()),
-    "in_statistical_report": (lambda f: _STUB_VALUES["in_statistical_report"], ()),
 }
 
 
 def adapt_to_training_contract(features: dict[str, Any]) -> ModelInput:
     """Map a live :class:`~src.features.pipeline.FeatureVector` feature dict
-    onto the model's 22-feature training contract.
+    onto the model's 18-feature training contract.
 
     Args:
         features: The ``.features`` dict from a live-extracted
@@ -206,10 +196,12 @@ def adapt_to_training_contract(features: dict[str, Any]) -> ModelInput:
             any subset may be missing/``None`` if a tier didn't run).
 
     Returns:
-        A :class:`ModelInput` with all 22 :data:`FEATURE_ORDER` features
-        populated and ``approximated`` listing which ones were stubbed
-        (the 4 dead signals) or fell back to the missing-input default
-        because their live input was ``None``.
+        A :class:`ModelInput` with all 18 :data:`FEATURE_ORDER` features
+        populated. ``approximated`` lists any features that fell back to
+        their missing-input default because a live tier didn't run (e.g.
+        HTML/domain-intel weren't fetched) — normally empty when all tiers
+        ran, since every contract feature now has a genuine live derivation
+        (DEC-016).
 
     Raises:
         KeyError: If a contract feature has no registered derivation —

@@ -117,7 +117,7 @@ kaggle_rename:
 
 # ---------------------------------------------------------------------------
 # Feature contract
-# The 22 features the model will train on (post-merge, post-clean).
+# The 18 features the model will train on (post-merge, post-clean).
 # This list drives ColumnTransformer ordering at training time.
 # Reduced from an original 30 (DEC-013): url_length_cat, has_double_slash,
 # ssl_state, request_url_ratio, anchor_url_ratio, is_abnormal_url, has_redirect,
@@ -126,6 +126,14 @@ kaggle_rename:
 # the same mode-imputed constant, which is a source-artifact leakage risk
 # (the model could learn "this constant == Kaggle-sourced" instead of learning
 # about phishing). Dropped rather than imputed. See DATASET_NOTES.md.
+# Further reduced 22->18 (DEC-016): web_traffic, page_rank, google_indexed,
+# in_statistical_report have no live-extractor equivalent at all (dead
+# Alexa/PageRank-era signals, or require an unavailable third-party blocklist
+# API) — DEC-015's adapter had to stub them, and permutation/native feature
+# importance (docs/EXPERIMENTS.md Run 1) showed the model relying on them
+# heavily, meaning the trained model's benchmark accuracy did not reflect
+# real deployed accuracy. Dropped for the same reason as DEC-013's 8: don't
+# train on a signal the deployed model can never actually see.
 # Update model_version in feature_config.yaml if this list changes.
 # ---------------------------------------------------------------------------
 feature_columns:
@@ -147,10 +155,6 @@ feature_columns:
   - has_iframe
   - domain_age_cat
   - has_dns_record
-  - web_traffic
-  - page_rank
-  - google_indexed
-  - in_statistical_report
 
 # ---------------------------------------------------------------------------
 # Preprocessing

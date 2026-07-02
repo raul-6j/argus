@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from src.models.contract import FEATURE_ORDER, VALID_FEATURE_VALUES
-from src.models.feature_adapter import _STUB_VALUES, adapt_to_training_contract
+from src.models.feature_adapter import adapt_to_training_contract
 
 # A feature dict shaped like a fully-populated, legitimate-looking live
 # extraction (all three tiers ran, nothing suspicious tripped).
@@ -64,43 +64,34 @@ def test_all_values_are_uci_scale():
         assert all(v in VALID_FEATURE_VALUES for v in result.values.values())
 
 
-def test_dead_signals_always_approximated():
-    """The 4 features with no live equivalent are always flagged."""
+def test_no_features_approximated_when_all_tiers_ran():
+    """DEC-016: every contract feature now has a genuine live derivation —
+    a fully-populated input should approximate nothing."""
     result = adapt_to_training_contract(_LEGIT_FEATURES)
-    for name in _STUB_VALUES:
-        assert name in result.approximated
-        assert result.values[name] == _STUB_VALUES[name]
+    assert result.approximated == []
 
 
 def test_legit_like_input_skews_legit():
     result = adapt_to_training_contract(_LEGIT_FEATURES)
-    # Every feature with a direct live signal in _LEGIT_FEATURES should read
-    # legit (1) or suspicious (0), never phishing (-1) — excluding the 4
-    # always-stubbed dead signals which don't depend on the input at all.
+    # Every feature should read legit (1) or suspicious (0), never
+    # phishing (-1), given a fully legit-shaped input.
     for name in FEATURE_ORDER:
-        if name in _STUB_VALUES:
-            continue
         assert result.values[name] in (0, 1), f"{name} unexpectedly phishing-leaning"
 
 
 def test_phishing_like_input_skews_phishing():
     result = adapt_to_training_contract(_PHISHING_FEATURES)
     for name in FEATURE_ORDER:
-        if name in _STUB_VALUES:
-            continue
         assert result.values[name] in (-1, 0), f"{name} unexpectedly legit-leaning"
 
 
 def test_empty_input_is_conservative():
-    """No live signal at all -> every feature defaults to phishing(-1) or the
-    training-set mode stub, never a legit-leaning guess (DEC-007)."""
+    """No live signal at all -> every feature defaults to phishing(-1),
+    never a legit-leaning guess (DEC-007), and all are reported approximated."""
     result = adapt_to_training_contract({})
     assert set(result.approximated) == set(FEATURE_ORDER)
     for name in FEATURE_ORDER:
-        if name in _STUB_VALUES:
-            assert result.values[name] == _STUB_VALUES[name]
-        else:
-            assert result.values[name] == -1, f"{name} was not conservative on missing input"
+        assert result.values[name] == -1, f"{name} was not conservative on missing input"
 
 
 def test_domain_reg_length_derived_from_age_plus_expiry():
