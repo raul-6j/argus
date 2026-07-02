@@ -24,7 +24,14 @@ coverage.xml
 # --- Serialized models (Iron Law #5) ---
 models/*.pkl
 models/*.joblib
+models/**/*.pkl
+models/**/*.joblib
+models/**/*.json
 models/latest/
+
+# --- Model reports (plots/JSON are fine to commit; the access log is a
+# local dev audit trail, not meaningful history) ---
+reports/.test_set_access_log.json
 
 # --- Secrets / config ---
 .env

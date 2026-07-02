@@ -1,20 +1,55 @@
-# ARGUS — Model configuration
-# TODO (Phase 5, Task 5.1): fill in all sections below for DT / RF / LR / SVM experiments.
-# Keep all experiments reproducible: random_state=42.
+# ARGUS — Model configuration (Phase 5, Task 5.1)
+# All 4 classifiers are trained via GridSearchCV on data/processed/train.parquet
+# only (stratified 5-fold CV). data/processed/test.parquet is touched exactly
+# once, by src/models/evaluate.py — never by train.py (Task 5.2 iron rule).
+#
+# Feature contract: the 22 features in configs/data_config.yaml -> feature_columns
+# (see src/models/contract.py::FEATURE_ORDER). NOT the same list as
+# configs/feature_config.yaml's live-extractor feature_order (DEC-015).
 
 random_state: 42
+cv_folds: 5
+scoring: f1
+tiebreak: roc_auc
+threshold: 0.5  # calibrated and possibly overwritten in Phase 5.3 (SHAP/calibration)
 
-# data:
-#   train_path:
-#   test_size:
+data:
+  train_path: data/processed/train.parquet
+  val_path: data/processed/val.parquet
+  test_path: data/processed/test.parquet
 
-# model:
-#   type:            # decision_tree | random_forest | logistic_regression | svm
-#   params: {}
+output:
+  candidates_dir: models/candidates/
+  production_dir: models/production/
+  reports_dir: reports/
 
-# training:
-#   cv_folds:
-#   scoring:
-
-# output:
-#   model_dir: models/latest/
+models:
+  decision_tree:
+    class: sklearn.tree.DecisionTreeClassifier
+    scale_features: false
+    params:
+      max_depth: [5, 10, 20, null]
+      class_weight: [balanced]
+  random_forest:
+    class: sklearn.ensemble.RandomForestClassifier
+    scale_features: false
+    params:
+      n_estimators: [100]  # cap at 100 for serving latency
+      max_depth: [10, 20, null]
+      class_weight: [balanced]
+      n_jobs: [1]  # single-thread for serving
+  logistic_regression:
+    class: sklearn.linear_model.LogisticRegression
+    scale_features: true
+    params:
+      C: [0.1, 1.0, 10.0]
+      class_weight: [balanced]
+      max_iter: [1000]
+  svm:
+    class: sklearn.svm.SVC
+    scale_features: true
+    params:
+      C: [1.0, 10.0]
+      kernel: [rbf]
+      class_weight: [balanced]
+      probability: [true]  # required for SHAP + confidence score

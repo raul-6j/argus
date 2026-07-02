@@ -6,6 +6,7 @@ scikit-learn==1.5.2
 xgboost==2.1.1
 lightgbm==4.5.0
 shap==0.46.0
+matplotlib==3.9.4      # ROC curve + confusion matrix plots (Phase 5, Task 5.2)
 
 # --- Feature extraction ---
 tldextract==5.1.2
