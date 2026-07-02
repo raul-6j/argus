@@ -98,7 +98,7 @@ kaggle_rename:
   iframe: "has_iframe"
   popup_window: "has_popup"
   onmouseover: "has_onmouseover"
-  right_click: "right_click_disabled"
+  right_clic: "right_click_disabled"    # dataset column has no "k" — not a typo, verify before "fixing"
   external_favicon: "has_favicon"
   port: "has_port"
   domain_registration_length: "domain_reg_length"
@@ -109,33 +109,38 @@ kaggle_rename:
   google_index: "google_indexed"
   statistical_report: "in_statistical_report"
   status: "label"
+  # normalise_labels() already renames "status" → "label" before this map runs,
+  # so the "status" key above never matches by the time rename_columns() sees
+  # the frame. This passthrough (mirroring uci_rename's) is what actually keeps
+  # the label column instead of it being silently dropped as unmapped.
+  label: "label"
 
 # ---------------------------------------------------------------------------
 # Feature contract
-# The 30 features the model will train on (post-merge, post-clean).
+# The 22 features the model will train on (post-merge, post-clean).
 # This list drives ColumnTransformer ordering at training time.
+# Reduced from an original 30 (DEC-013): url_length_cat, has_double_slash,
+# ssl_state, request_url_ratio, anchor_url_ratio, is_abnormal_url, has_redirect,
+# and inbound_links exist only in UCI's pre-thresholded schema — the Kaggle
+# dataset has no equivalent column, so keeping them meant every Kaggle row got
+# the same mode-imputed constant, which is a source-artifact leakage risk
+# (the model could learn "this constant == Kaggle-sourced" instead of learning
+# about phishing). Dropped rather than imputed. See DATASET_NOTES.md.
 # Update model_version in feature_config.yaml if this list changes.
 # ---------------------------------------------------------------------------
 feature_columns:
   - has_ip_address
-  - url_length_cat
   - has_shortening
   - has_at_symbol
-  - has_double_slash
   - has_prefix_suffix
   - subdomain_level
-  - ssl_state
   - domain_reg_length
   - has_favicon
   - has_port
   - https_in_domain
-  - request_url_ratio
-  - anchor_url_ratio
   - links_in_tags
   - server_form_handler
   - submits_to_email
-  - is_abnormal_url
-  - has_redirect
   - has_onmouseover
   - right_click_disabled
   - has_popup
@@ -145,7 +150,6 @@ feature_columns:
   - web_traffic
   - page_rank
   - google_indexed
-  - inbound_links
   - in_statistical_report
 
 # ---------------------------------------------------------------------------
@@ -161,7 +165,7 @@ preprocessing:
     categorical_int: "mode"     # for -1/0/1 columns: fill with mode
     fallback: "mode"
 
-  # Drop exact duplicate rows (all 30 features + label identical)
+  # Drop exact duplicate rows (all 22 features + label identical)
   drop_duplicates: true
 
 # ---------------------------------------------------------------------------
