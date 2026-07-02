@@ -16,6 +16,174 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# Kaggle scale normalisation (DEC-014)
+# ---------------------------------------------------------------------------
+#
+# UCI's original 30 features are pre-thresholded into a -1/0/1 categorical
+# scheme (Mohammad, Thabtah & McCluskey, 2014). Kaggle's raw columns measure
+# the same underlying signals but on continuous/count scales (e.g. raw days,
+# raw @ count, raw traffic volume). `kaggle_rename` only renames columns — it
+# never converted values — so before this fix the merged 22-feature contract
+# silently mixed two incompatible scales in 8 columns (UCI rows clean -1/0/1,
+# Kaggle rows raw magnitudes), split cleanly along the source boundary. That
+# is a severe source-artifact leakage risk, worse than the 8 columns already
+# dropped in DEC-013. This module buckets Kaggle's raw values into UCI's
+# categorical scheme *before* rename_columns() runs, operating on Kaggle's
+# raw (pre-rename) column names so the existing kaggle_rename map is untouched.
+#
+# Thresholds are UCI's published rule where the literature is unambiguous
+# (domain_registration_length, age_of_domain, having_at_symbol, having_sub_domain).
+# Where Kaggle's own metric is not equivalent to UCI's original signal
+# (web_traffic, page_rank, links_in_tags, statistical_report — verified via
+# empirical class-conditional distributions on data/raw/kaggle_phishing.csv,
+# 2 Jul 2026), thresholds are a documented, direction-verified approximation:
+# each was confirmed to separate legitimate/phishing medians in the expected
+# direction before being hardcoded here. -1 is always the phishing-indicating
+# bucket, matching UCI's convention and DEC-007's "assume threat" principle
+# for unknown/sentinel values (e.g. -1 in Kaggle's WHOIS-derived columns).
+
+
+def _bucket_registration_length(days: float) -> int:
+    """UCI rule: registration <=365 days -> phishing(-1); >365 -> legit(1).
+
+    Kaggle uses -1 as a sentinel for a failed WHOIS lookup; treated as
+    phishing per DEC-007 (assume threat when uncertain).
+    """
+    if pd.isna(days) or days <= 365:
+        return -1
+    return 1
+
+
+def _bucket_domain_age(days: float) -> int:
+    """UCI rule: age >=180 days (~6 months) -> legit(1); else phishing(-1).
+
+    Kaggle uses negative sentinels (-1, -2, -12 observed) for failed/invalid
+    WHOIS lookups; treated as phishing per DEC-007.
+    """
+    if pd.isna(days) or days < 180:
+        return -1
+    return 1
+
+
+def _bucket_web_traffic(value: float) -> int:
+    """Approximated ternary bucket for Kaggle's traffic-volume metric.
+
+    Not Alexa rank (Kaggle's raw scale is 0 to ~10.7M, higher = more
+    traffic). Verified empirically (2 Jul 2026): phishing median traffic = 0,
+    legitimate median = 25,176, legitimate 75th percentile = 516,310. Buckets
+    chosen so 0 traffic (dead/unranked site) reads as phishing(-1), and the
+    legitimate median falls inside the middle bucket rather than the top one.
+    """
+    if pd.isna(value) or value <= 0:
+        return -1
+    if value <= 100_000:
+        return 0
+    return 1
+
+
+def _bucket_page_rank(value: float) -> int:
+    """Approximated binary bucket for Kaggle's 0-10 page-rank scale.
+
+    UCI's own page_rank is binary {-1, 1} (normalised Google PageRank).
+    Kaggle's is an integer 0-10 scale; verified empirically (2 Jul 2026):
+    phishing median = 1, legitimate median = 5. Threshold at the midpoint.
+    """
+    if pd.isna(value) or value < 5:
+        return -1
+    return 1
+
+
+def _bucket_links_in_tags(pct: float) -> int:
+    """Ternary bucket for Kaggle's 0-100 internal-tag-link percentage.
+
+    UCI's links_in_tags is ternary {-1, 0, 1}. Kaggle's raw scale is a 0-100
+    percentage of internal-domain links inside <meta>/<script>/<link> tags;
+    verified empirically (2 Jul 2026) that legitimate pages skew higher
+    (median 66.7) than phishing pages (median 33.3) — i.e. higher internal
+    ratio reads as more legitimate. Tercile cutoffs chosen to match those
+    observed medians.
+    """
+    if pd.isna(pct) or pct < 33.3:
+        return -1
+    if pct <= 66.7:
+        return 0
+    return 1
+
+
+def _bucket_statistical_report(value: float) -> int:
+    """UCI rule: flagged in a phishing statistical report -> -1; else 1.
+
+    Kaggle's raw column is mostly 0 (not flagged) with rare 1/2 values;
+    verified empirically (2 Jul 2026) that phishing rows are flagged ~8x more
+    often than legitimate rows, confirming any nonzero value is a phishing
+    signal.
+    """
+    if pd.isna(value) or value == 0:
+        return 1
+    return -1
+
+
+def _bucket_at_symbol_count(count: float) -> int:
+    """UCI rule: any '@' present -> phishing(-1); none -> legit(1)."""
+    if pd.isna(count) or count > 0:
+        return -1
+    return 1
+
+
+def _bucket_subdomain_count(count: float) -> int:
+    """UCI rule (dot-count analogue): 1 subdomain level -> legit(1);
+    2 -> suspicious(0); >=3 -> phishing(-1).
+
+    Kaggle's nb_subdomains is already a level count (observed range 1-3),
+    directly analogous to UCI's own dot-count thresholding.
+    """
+    if pd.isna(count) or count <= 1:
+        return 1
+    if count == 2:
+        return 0
+    return -1
+
+
+# Kaggle raw column name -> bucketing function. Applied in place so the
+# existing `kaggle_rename` map (which only renames, does not transform)
+# continues to work unchanged downstream.
+_KAGGLE_SCALE_BUCKETS: dict[str, Any] = {
+    "domain_registration_length": _bucket_registration_length,
+    "domain_age": _bucket_domain_age,
+    "web_traffic": _bucket_web_traffic,
+    "page_rank": _bucket_page_rank,
+    "links_in_tags": _bucket_links_in_tags,
+    "statistical_report": _bucket_statistical_report,
+    "nb_at": _bucket_at_symbol_count,
+    "nb_subdomains": _bucket_subdomain_count,
+}
+
+
+def bucket_kaggle_scale(df: pd.DataFrame) -> pd.DataFrame:
+    """Convert Kaggle's raw continuous/count columns to UCI's -1/0/1 scale.
+
+    Must run on the raw Kaggle DataFrame (original column names) before
+    :func:`rename_columns`. Columns not present in ``df`` are skipped (keeps
+    this safe to call even if Kaggle's schema drifts). See DEC-014.
+
+    Args:
+        df: Raw Kaggle DataFrame (post label-normalisation, pre-rename).
+
+    Returns:
+        A copy of ``df`` with the 8 scale-mismatched columns bucketed to
+        UCI's categorical scheme; all other columns unchanged.
+    """
+    df = df.copy()
+    applied = []
+    for col, bucket_fn in _KAGGLE_SCALE_BUCKETS.items():
+        if col in df.columns:
+            df[col] = df[col].apply(bucket_fn)
+            applied.append(col)
+    logger.info("Kaggle scale normalisation applied to %d columns: %s", len(applied), applied)
+    return df
+
+
+# ---------------------------------------------------------------------------
 # Renaming & schema alignment
 # ---------------------------------------------------------------------------
 

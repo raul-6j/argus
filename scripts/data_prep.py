@@ -41,6 +41,7 @@ from src.data.preprocessor import (  # noqa: E402
     align_schemas,
     apply_imputer,
     audit_missing,
+    bucket_kaggle_scale,
     compute_dataset_stats,
     drop_duplicates,
     drop_high_null_columns,
@@ -324,6 +325,16 @@ def run_pipeline(config: dict, uci_only: bool = False) -> None:
         )
     else:
         kaggle_normed = None
+
+    # ------------------------------------------------------------------
+    # Step 2b: Bucket Kaggle's raw continuous/count columns onto UCI's
+    # -1/0/1 scale (DEC-014) — must run before rename, on raw column names.
+    # ------------------------------------------------------------------
+    if kaggle_normed is not None:
+        logger.info("=" * 60)
+        logger.info("STEP 2b: Bucket Kaggle columns to UCI scale (DEC-014)")
+        logger.info("=" * 60)
+        kaggle_normed = bucket_kaggle_scale(kaggle_normed)
 
     # ------------------------------------------------------------------
     # Step 3: Rename columns to internal names
