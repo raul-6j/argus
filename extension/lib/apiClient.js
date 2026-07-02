@@ -5,6 +5,7 @@
  * third-party extension with a different response shape (DEC-020).
  */
 
+import { apiRequest } from "./httpClient.js";
 import { toHostnameOnly } from "./urlUtils.js";
 
 /**
@@ -13,19 +14,6 @@ import { toHostnameOnly } from "./urlUtils.js";
  */
 export async function getSettings() {
   return chrome.storage.sync.get({ apiBaseUrl: "", sendFullUrl: false });
-}
-
-async function postJson(baseUrl, path, payload) {
-  const resp = await fetch(`${baseUrl.replace(/\/$/, "")}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  const body = await resp.json().catch(() => ({}));
-  if (!resp.ok) {
-    throw new Error(body.error || `Request to ${path} failed: HTTP ${resp.status}`);
-  }
-  return body;
 }
 
 /**
@@ -49,7 +37,9 @@ export async function detect(url) {
   if (!apiBaseUrl) {
     throw new Error("ARGUS API base URL not configured. Open the extension options page.");
   }
-  return postJson(apiBaseUrl, "/detect", { url: buildPayloadUrl(url, sendFullUrl), enrich: false });
+  return apiRequest(apiBaseUrl, "POST", "/detect", {
+    body: { url: buildPayloadUrl(url, sendFullUrl), enrich: false },
+  });
 }
 
 /**
@@ -63,5 +53,5 @@ export async function explain(url) {
   if (!apiBaseUrl) {
     throw new Error("ARGUS API base URL not configured. Open the extension options page.");
   }
-  return postJson(apiBaseUrl, "/explain", { url: buildPayloadUrl(url, sendFullUrl) });
+  return apiRequest(apiBaseUrl, "POST", "/explain", { body: { url: buildPayloadUrl(url, sendFullUrl) } });
 }

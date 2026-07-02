@@ -37,6 +37,10 @@ reports/.test_set_access_log.json
 .env
 *.env
 
+# --- Auth/vault database (Phase 8) — local dev data, never commit ---
+*.db
+*.db-journal
+
 # --- Caches ---
 /tmp/tldextract_cache/
 .tldextract_cache/

@@ -23,6 +23,11 @@ Flask-Limiter==3.11.0  # in-memory storage by default (see configs/api_config.ya
                         # point rate_limit_storage_uri at redis:// for multi-worker prod
 marshmallow==4.0.1
 
+# --- Auth + vault (Phase 8) ---
+SQLAlchemy==2.0.51
+argon2-cffi==25.1.0     # Argon2id password hashing
+PyJWT==2.13.0           # 15-min access tokens, HS256
+
 # --- Serialization / config ---
 joblib==1.4.2
 PyYAML==6.0.2

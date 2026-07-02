@@ -37,3 +37,29 @@ enrichment_max_workers: 8
 # rather than duplicated as a second source of truth; app.py reads it from
 # model_config.yaml at startup. Present here only as a documented pointer.
 threshold_source: configs/model_config.yaml
+
+# --- Auth + vault (Phase 8) ---
+# SQLite for dev; a real deployment would point this at PostgreSQL, per
+# CLAUDE.md's stated prod DB target — no code change needed, just this URL.
+database_url: "sqlite:///argus_dev.db"
+
+# S6: SECRET_KEY is intentionally NOT here — it must come from the
+# SECRET_KEY environment variable only (src/api/auth/utils.py::get_secret_key
+# fails closed if unset). Putting a default here would defeat the point.
+
+# No email backend is configured (no SMTP credentials exist for this
+# project) — see DEC-021. When true, /auth/signup includes the OTP in its
+# JSON response instead of "sending" it, for local development/testing only.
+# MUST be false (the default) in any deployment reachable by anyone but you.
+auth_dev_return_otp: false
+
+# Extra, tighter per-route limits on the auth endpoints most attractive to
+# brute force/credential-stuffing, independent of S4's per-account OTP
+# lockout (which only kicks in after an OTP has already been issued) and
+# independent of the global `rate_limit` above. Not hardcoded in app.py
+# (Iron Law #2) so tests can override them without changing production
+# defaults — see tests/api/conftest.py.
+auth_rate_limits:
+  login: "10 per minute"
+  signup: "5 per minute"
+  verify_otp: "10 per minute"

@@ -25,8 +25,12 @@ from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
+from src.api.auth.routes import auth_bp
+from src.api.auth.utils import get_secret_key
+from src.api.db import create_db_engine, create_session_factory, init_db
 from src.api.detect import detect_bp
 from src.api.health import health_bp
+from src.api.vault.routes import vault_bp
 from src.models.contract import FEATURE_ORDER
 from src.models.explain import build_explainer, explain_single
 
@@ -103,6 +107,11 @@ def create_app(
     Returns:
         A configured :class:`flask.Flask` instance, ready to serve.
     """
+    # S6: fail closed on a missing SECRET_KEY, before doing any other work
+    # (loading the model takes seconds; no point paying that cost if we're
+    # about to refuse to start anyway).
+    secret_key = get_secret_key()
+
     api_config = _load_config(Path(config_path) if config_path else _DEFAULT_API_CONFIG_PATH)
     model_config = _load_config(
         Path(model_config_path) if model_config_path else _DEFAULT_MODEL_CONFIG_PATH
@@ -110,6 +119,16 @@ def create_app(
 
     app = Flask(__name__)
     app.config["ALLOW_LOCALHOST"] = api_config.get("allow_localhost", False)
+    app.config["AUTH_DEV_RETURN_OTP"] = api_config.get("auth_dev_return_otp", False)
+
+    db_engine = create_db_engine(api_config.get("database_url", "sqlite:///argus.db"))
+    init_db(db_engine)
+    session_factory = create_session_factory(db_engine)
+    app.extensions["argus_auth"] = {
+        "secret_key": secret_key,
+        "session_factory": session_factory,
+        "db_engine": db_engine,
+    }
 
     model_path = PROJECT_ROOT / api_config["model_path"]
     metadata_path = PROJECT_ROOT / api_config["model_metadata_path"]
@@ -147,6 +166,8 @@ def create_app(
 
     app.register_blueprint(health_bp)
     app.register_blueprint(detect_bp)
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(vault_bp)
 
     CORS(app, resources={r"/*": {"origins": api_config.get("cors_origins", [])}})
 
@@ -157,6 +178,29 @@ def create_app(
         storage_uri=api_config.get("rate_limit_storage_uri", "memory://"),
     )
     app.extensions["argus"]["limiter"] = limiter
+
+    # Extra, tighter limits on the auth endpoints most attractive to brute
+    # force/credential-stuffing, independent of S4's per-account OTP
+    # lockout (which only kicks in after an OTP has been issued).
+    #
+    # limiter.limit(...) returns a LimitDecorator whose __call__ returns a
+    # NEW wrapped function -- it does not mutate the view in place. Flask
+    # dispatches by looking up app.view_functions[endpoint] on every
+    # request, so the wrapped function must be written back into that dict;
+    # calling the decorator and discarding the result (as an earlier version
+    # of this code did) silently applies no limit at all.
+    auth_rate_limits = api_config.get(
+        "auth_rate_limits",
+        {"login": "10 per minute", "signup": "5 per minute", "verify_otp": "10 per minute"},
+    )
+    for endpoint, config_key in (
+        ("auth.login", "login"),
+        ("auth.signup", "signup"),
+        ("auth.verify_otp", "verify_otp"),
+    ):
+        app.view_functions[endpoint] = limiter.limit(auth_rate_limits[config_key])(
+            app.view_functions[endpoint]
+        )
 
     @app.errorhandler(404)
     def _not_found(_exc):

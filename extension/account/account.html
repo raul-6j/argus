@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ARGUS Account</title>
+  <link rel="stylesheet" href="account.css" />
+</head>
+<body>
+  <main>
+    <h1>ARGUS Account</h1>
+
+    <section id="loggedOutView">
+      <div class="tabs">
+        <button id="tabSignup" class="tab active" type="button">Sign Up</button>
+        <button id="tabLogin" class="tab" type="button">Log In</button>
+      </div>
+
+      <form id="signupForm" class="panel">
+        <label for="signupEmail">Email</label>
+        <input id="signupEmail" type="email" required autocomplete="email" />
+        <label for="signupPassword">Password (min 8 characters)</label>
+        <input id="signupPassword" type="password" required minlength="8" autocomplete="new-password" />
+        <p class="hint">
+          This password also encrypts your vault, client-side, before it's
+          ever sent anywhere (see "Why?" link below). ARGUS cannot recover it
+          for you if you forget it.
+        </p>
+        <button type="submit">Sign Up</button>
+      </form>
+
+      <form id="otpForm" class="panel hidden">
+        <p>Enter the 6-digit code sent to your email.</p>
+        <label for="otpCode">Verification code</label>
+        <input id="otpCode" type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required />
+        <button type="submit">Verify</button>
+      </form>
+
+      <form id="loginForm" class="panel hidden">
+        <label for="loginEmail">Email</label>
+        <input id="loginEmail" type="email" required autocomplete="email" />
+        <label for="loginPassword">Password</label>
+        <input id="loginPassword" type="password" required autocomplete="current-password" />
+        <button type="submit">Log In</button>
+      </form>
+    </section>
+
+    <section id="loggedInView" class="hidden">
+      <p>Signed in as <strong id="currentEmail"></strong>.</p>
+      <button id="logoutBtn" type="button">Log Out</button>
+
+      <h2>Vault (synced allowlist/blocklist)</h2>
+      <p class="hint">
+        One hostname per line. Encrypted with your password before it leaves
+        this device — see <code>extension/lib/crypto.js</code>.
+      </p>
+      <textarea id="vaultTextarea" rows="8"></textarea>
+      <div class="vault-actions">
+        <button id="vaultReloadBtn" type="button">Reload</button>
+        <button id="vaultSaveBtn" type="button">Save</button>
+      </div>
+    </section>
+
+    <p id="status" role="status"></p>
+  </main>
+  <script type="module" src="account.js"></script>
+</body>
+</html>
