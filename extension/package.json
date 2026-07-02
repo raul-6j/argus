@@ -1,0 +1,13 @@
+{
+  "name": "argus-extension",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ARGUS Phishing Detector browser extension (MV3). Original code -- Aegis (arjunt-dev/aegis-chrome-extension) referenced only for architecture/UX ideas, never copied; it carries no license (DEC-020).",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.6"
+  }
+}

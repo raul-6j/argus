@@ -1,0 +1,54 @@
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  max-width: 480px;
+  margin: 2rem auto;
+  color: #1a1a1a;
+}
+
+h1 {
+  font-size: 1.1rem;
+}
+
+label {
+  display: block;
+  margin-top: 1.25rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+input[type="text"] {
+  width: 100%;
+  padding: 0.5rem;
+  font-size: 0.95rem;
+  box-sizing: border-box;
+  margin-top: 0.25rem;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+}
+
+.checkbox-row input {
+  margin: 0;
+}
+
+.hint {
+  font-size: 0.8rem;
+  color: #555;
+  margin: 0.35rem 0 0;
+}
+
+button {
+  margin-top: 1.5rem;
+  padding: 0.5rem 1.25rem;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+#status {
+  font-size: 0.85rem;
+  margin-top: 0.75rem;
+}

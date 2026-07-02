@@ -58,3 +58,6 @@ data/processed/*.json
 .DS_Store
 .idea/
 .vscode/
+
+# --- Browser extension (Node tooling for tests only; MV3 needs no build step) ---
+extension/node_modules/

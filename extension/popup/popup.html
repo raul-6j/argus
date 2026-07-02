@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ARGUS</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <main>
+    <header>
+      <h1>ARGUS</h1>
+      <span id="hostname" class="hostname"></span>
+    </header>
+
+    <section id="loading" class="state">Checking...</section>
+
+    <section id="result" class="state hidden">
+      <div id="verdict" class="verdict"></div>
+      <div id="confidence" class="confidence"></div>
+      <button id="whyBtn" type="button">Why?</button>
+      <div id="shapPanel" class="shap-panel hidden"></div>
+    </section>
+
+    <section id="errorState" class="state hidden">
+      <p id="errorMessage"></p>
+      <button id="openOptions" type="button">Open Settings</button>
+    </section>
+  </main>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

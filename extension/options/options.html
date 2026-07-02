@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ARGUS Settings</title>
+  <link rel="stylesheet" href="options.css" />
+</head>
+<body>
+  <main>
+    <h1>ARGUS Phishing Detector — Settings</h1>
+
+    <label for="apiBaseUrl">ARGUS API base URL</label>
+    <input
+      id="apiBaseUrl"
+      type="text"
+      placeholder="http://localhost:5000"
+      autocomplete="off"
+      spellcheck="false"
+    />
+    <p class="hint">
+      Not pre-filled or hardcoded — point this at your own running ARGUS API
+      instance (dev default is usually <code>http://localhost:5000</code>).
+      Saving requests browser permission to contact this origin.
+    </p>
+
+    <label class="checkbox-row">
+      <input id="sendFullUrl" type="checkbox" />
+      Send the full URL instead of hostname-only
+    </label>
+    <p class="hint">
+      Off by default (recommended). When off, only the page's
+      <code>scheme://host</code> is sent to the API — never the path, query
+      string, or fragment, which can contain sensitive data (session tokens,
+      search terms, email addresses in a login form's query string, etc).
+    </p>
+
+    <button id="save">Save</button>
+    <p id="status" role="status"></p>
+  </main>
+  <script type="module" src="options.js"></script>
+</body>
+</html>

@@ -6,11 +6,15 @@
 model_path: models/production/model.joblib
 model_metadata_path: models/production/metadata.json
 
-# CORS — locked to the extension origin only. Phase 7 fills in the real
-# unpacked/published extension ID; until then this is intentionally a
-# placeholder that will not match any real request (fails closed, not open).
+# CORS — locked to the extension origin only. The ID below is deterministic
+# (not Chrome-assigned at random): extension/manifest.json pins a "key"
+# (the extension's RSA public key), and Chrome derives the extension ID from
+# it — id = base32-ish-map(SHA256(DER public key)[:16 bytes]). Loading
+# extension/ unpacked in Chrome will therefore always produce this exact ID.
+# If Chrome ever shows a different ID, trust Chrome and update this value —
+# it is the ground truth, this is a derivation.
 cors_origins:
-  - "chrome-extension://REPLACE_WITH_EXTENSION_ID"
+  - "chrome-extension://dhmdjnjpmbiahdoglbgcdpkilaodlcpd"
 
 # flask-limiter. In-memory storage is fine for a single-process dev/thesis
 # deployment; point storage_uri at redis://... for a multi-worker production
