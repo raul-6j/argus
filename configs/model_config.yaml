@@ -11,7 +11,7 @@ random_state: 42
 cv_folds: 5
 scoring: f1
 tiebreak: roc_auc
-threshold: 0.5  # calibrated and possibly overwritten in Phase 5.3 (SHAP/calibration)
+threshold: 0.3  # calibrated on validation set, 0.7448 F1 (scripts/generate_shap_report.py)
 
 data:
   train_path: data/processed/train.parquet
