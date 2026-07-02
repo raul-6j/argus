@@ -42,6 +42,16 @@ DEFAULT_SUSPICIOUS_KEYWORDS: tuple[str, ...] = (
     "update",
     "account",
 )
+# Known URL-shortener domains — needed for has_shortening (DEC-015: this
+# signal has no live-extractor equivalent yet; UCI's own Shortining_Service
+# feature is a similar hardcoded-list check against the raw URL).
+DEFAULT_KNOWN_SHORTENERS: frozenset[str] = frozenset(
+    {
+        "bit.ly", "tinyurl.com", "goo.gl", "t.co", "ow.ly", "is.gd", "buff.ly",
+        "adf.ly", "bl.ink", "lnkd.in", "rebrand.ly", "shorturl.at", "cutt.ly",
+        "tiny.cc", "s.id", "v.gd", "rb.gy", "shrtco.de", "chilp.it", "qr.ae",
+    }
+)
 
 _CONFIG_PATH = Path(__file__).resolve().parents[2] / "configs" / "feature_config.yaml"
 
@@ -70,6 +80,26 @@ def _load_suspicious_lists() -> tuple[frozenset[str], Pattern[str]]:
     regex = re.compile("|".join(re.escape(k) for k in keywords))
     return tlds, regex
 
+
+@lru_cache(maxsize=1)
+def _load_known_shorteners() -> frozenset[str]:
+    """Load known URL-shortener domains from config, falling back to defaults.
+
+    Returns:
+        A frozenset of lowercase shortener domains (e.g. ``"bit.ly"``).
+    """
+    shorteners = DEFAULT_KNOWN_SHORTENERS
+    try:
+        with _CONFIG_PATH.open("r", encoding="utf-8") as fh:
+            data = yaml.safe_load(fh)
+        if isinstance(data, dict):
+            cfg_shorteners = data.get("known_shorteners")
+            if cfg_shorteners:
+                shorteners = frozenset(str(s).lower() for s in cfg_shorteners)
+    except Exception as exc:  # noqa: BLE001 - config is optional; defaults suffice
+        logger.warning("Falling back to default known-shorteners list: %s", exc)
+    return shorteners
+
 # Canonical ordering of every feature this module produces. Used to build a
 # fully-``None`` result when the input itself is unusable.
 FEATURE_KEYS: tuple[str, ...] = (
@@ -92,6 +122,7 @@ FEATURE_KEYS: tuple[str, ...] = (
     "num_hyphens_in_hostname",
     "url_entropy",
     "digit_ratio_in_url",
+    "has_shortening",
 )
 
 
@@ -174,7 +205,7 @@ def extract_lexical_features(url: Any) -> dict[str, Any]:
             port_number (int, -1 if absent), tld (str), is_suspicious_tld (bool),
             domain (str), has_suspicious_keywords (bool),
             num_hyphens_in_hostname (int), url_entropy (float),
-            digit_ratio_in_url (float).
+            digit_ratio_in_url (float), has_shortening (bool).
     """
     if not isinstance(url, str) or not url.strip():
         logger.warning("extract_lexical_features received unusable input: %r", url)
@@ -187,6 +218,11 @@ def extract_lexical_features(url: Any) -> dict[str, Any]:
     hostname = _safe("hostname", lambda: parsed.hostname if parsed is not None else None)
     lower_url = url.lower()
     suspicious_tlds, keyword_re = _load_suspicious_lists()
+    known_shorteners = _load_known_shorteners()
+
+    def _has_shortening() -> bool:
+        registered = registered_domain_of(ext) if ext is not None else ""
+        return bool(registered) and registered.lower() in known_shorteners
 
     def _safe_port() -> Optional[int]:
         # parsed.port raises ValueError on a malformed port (e.g. :abc, :99999).
@@ -254,4 +290,5 @@ def extract_lexical_features(url: Any) -> dict[str, Any]:
             "digit_ratio_in_url",
             lambda: sum(c.isdigit() for c in url) / len(url) if url else 0.0,
         ),
+        "has_shortening": _safe("has_shortening", _has_shortening),
     }

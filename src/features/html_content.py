@@ -39,6 +39,18 @@ _HIDDEN_STYLE_RE = re.compile(
 # Tags whose text is not user-visible and must be stripped before counting text.
 _NON_VISIBLE_TAGS = ("script", "style", "noscript", "template", "head")
 
+# Regex patterns for JS-behavior signals (DEC-015). These are best-effort
+# static checks on the raw markup/script text, not a JS interpreter — a page
+# that constructs these handlers dynamically (e.g. via string concatenation)
+# will not be detected. That's an accepted limitation, matching how UCI's
+# original on_mouseover/rightclick/popup features were themselves reproduced
+# by later researchers without a live browser.
+_ONMOUSEOVER_RE = re.compile(r"onmouseover\s*=", re.IGNORECASE)
+_RIGHT_CLICK_DISABLED_RE = re.compile(
+    r"oncontextmenu\s*=|event\.button\s*==\s*2|event\.button\s*==\s*3", re.IGNORECASE
+)
+_POPUP_RE = re.compile(r"window\.open\s*\(", re.IGNORECASE)
+
 # Canonical ordering of every feature this module produces.
 FEATURE_KEYS: tuple[str, ...] = (
     "num_external_links",
@@ -55,6 +67,13 @@ FEATURE_KEYS: tuple[str, ...] = (
     "page_text_length",
     "has_copyright",
     "external_link_ratio",
+    "form_action_is_external",
+    "form_action_is_empty_or_blank",
+    "form_submits_to_email",
+    "has_onmouseover",
+    "has_right_click_disabled",
+    "has_suspicious_popup",
+    "internal_tag_link_ratio",
 )
 
 
@@ -165,7 +184,10 @@ def extract_html_features(
             has_hidden_elements (bool), num_images (int), num_scripts (int),
             has_favicon (bool), title_length (int), meta_description_length (int),
             page_text_length (int), has_copyright (bool),
-            external_link_ratio (float).
+            external_link_ratio (float), form_action_is_external (bool),
+            form_action_is_empty_or_blank (bool), form_submits_to_email (bool),
+            has_onmouseover (bool), has_right_click_disabled (bool),
+            has_suspicious_popup (bool), internal_tag_link_ratio (float).
     """
     if not isinstance(html, str) or not html.strip():
         logger.warning("extract_html_features received unusable input: %r", type(html))
@@ -230,6 +252,64 @@ def extract_html_features(
         text = soup.get_text(separator=" ", strip=True)
         return "©" in text or "copyright" in text.lower()
 
+    def _form_actions() -> list[str]:
+        return [str(form.get("action", "")).strip() for form in soup.find_all("form")]
+
+    def _form_action_is_external() -> bool:
+        base_domain = _registered_domain(base_url)
+        for action in _form_actions():
+            if not action or action.lower() in ("#", "about:blank"):
+                continue
+            scheme = urlparse(action).scheme.lower()
+            if scheme in ("mailto", "tel", "javascript"):
+                continue
+            absolute = urljoin(base_url, action) if base_url else action
+            action_domain = _registered_domain(absolute)
+            if action_domain and base_domain and action_domain != base_domain:
+                return True
+        return False
+
+    def _form_action_is_empty_or_blank() -> bool:
+        return any(
+            not action or action.lower() in ("#", "about:blank")
+            for action in _form_actions()
+        )
+
+    def _form_submits_to_email() -> bool:
+        return any(action.lower().startswith("mailto:") for action in _form_actions())
+
+    def _has_onmouseover() -> bool:
+        return _ONMOUSEOVER_RE.search(html) is not None
+
+    def _has_right_click_disabled() -> bool:
+        return _RIGHT_CLICK_DISABLED_RE.search(html) is not None
+
+    def _has_suspicious_popup() -> bool:
+        return _POPUP_RE.search(html) is not None
+
+    def _internal_tag_link_ratio() -> float:
+        # UCI's Links_in_tags: proportion of <script src>/<link href> resource
+        # references that point to the page's own domain, vs. an external one.
+        base_domain = _registered_domain(base_url)
+        refs: list[str] = []
+        for tag_name, attr in (("script", "src"), ("link", "href")):
+            for tag in soup.find_all(tag_name):
+                value = tag.get(attr)
+                if value:
+                    refs.append(str(value).strip())
+        if not refs:
+            # No tag-embedded resource links at all — neutral/good default,
+            # matching this run's empirically-confirmed direction (higher
+            # internal ratio = more legitimate; see DEC-014).
+            return 1.0
+        internal = 0
+        for ref in refs:
+            absolute = urljoin(base_url, ref) if base_url else ref
+            ref_domain = _registered_domain(absolute)
+            if not ref_domain or (base_domain and ref_domain == base_domain):
+                internal += 1
+        return internal / len(refs)
+
     return {
         "num_external_links": num_external,
         "num_internal_links": num_internal,
@@ -247,4 +327,21 @@ def extract_html_features(
         "page_text_length": _safe("page_text_length", _page_text_length),
         "has_copyright": _safe("has_copyright", _has_copyright),
         "external_link_ratio": _safe("external_link_ratio", _external_link_ratio),
+        "form_action_is_external": _safe(
+            "form_action_is_external", _form_action_is_external
+        ),
+        "form_action_is_empty_or_blank": _safe(
+            "form_action_is_empty_or_blank", _form_action_is_empty_or_blank
+        ),
+        "form_submits_to_email": _safe(
+            "form_submits_to_email", _form_submits_to_email
+        ),
+        "has_onmouseover": _safe("has_onmouseover", _has_onmouseover),
+        "has_right_click_disabled": _safe(
+            "has_right_click_disabled", _has_right_click_disabled
+        ),
+        "has_suspicious_popup": _safe("has_suspicious_popup", _has_suspicious_popup),
+        "internal_tag_link_ratio": _safe(
+            "internal_tag_link_ratio", _internal_tag_link_ratio
+        ),
     }

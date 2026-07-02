@@ -89,6 +89,18 @@ def test_suspicious_tld() -> None:
     assert feats["tld"] == "tk"
 
 
+def test_known_shortener_detected() -> None:
+    """A domain on the known-shortener list flips has_shortening."""
+    feats = extract_lexical_features("https://bit.ly/3xYzAbc")
+    assert feats["has_shortening"] is True
+
+
+def test_normal_domain_not_shortener() -> None:
+    """An ordinary domain does not trip has_shortening."""
+    feats = extract_lexical_features("https://example.com/path")
+    assert feats["has_shortening"] is False
+
+
 def test_hyphens_in_hostname() -> None:
     """Hyphens are counted in the hostname only, not the whole URL."""
     feats = extract_lexical_features("http://my-secure-bank.com/a-b")

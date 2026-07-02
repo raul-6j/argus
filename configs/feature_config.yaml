@@ -39,6 +39,31 @@ suspicious_keywords:
   - update
   - account
 
+# Known URL-shortener domains, for has_shortening (DEC-015). Not exhaustive —
+# this is a hardcoded-list check, same limitation UCI's own Shortining_Service
+# feature has.
+known_shorteners:
+  - bit.ly
+  - tinyurl.com
+  - goo.gl
+  - t.co
+  - ow.ly
+  - is.gd
+  - buff.ly
+  - adf.ly
+  - bl.ink
+  - lnkd.in
+  - rebrand.ly
+  - shorturl.at
+  - cutt.ly
+  - tiny.cc
+  - s.id
+  - v.gd
+  - rb.gy
+  - shrtco.de
+  - chilp.it
+  - qr.ae
+
 # --- Model feature contract -------------------------------------------------
 # The trained model consumes features in EXACTLY this order. FeatureVector
 # .to_model_input() reads this list to build its numpy vector. Only numeric and

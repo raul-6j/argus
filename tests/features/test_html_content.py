@@ -170,6 +170,50 @@ def test_copyright_symbol_detected():
 
 
 # --------------------------------------------------------------------------- #
+# Behavioral / form signals (DEC-015)
+# --------------------------------------------------------------------------- #
+def test_behavioral_phishing_signals():
+    """Onmouseover, right-click-disable, popup, and external form action all trip."""
+    feats = extract_html_features(
+        _load("behavioral_phishing_page.html"), base_url="https://phish-login.net"
+    )
+    assert feats["has_onmouseover"] is True
+    assert feats["has_right_click_disabled"] is True
+    assert feats["has_suspicious_popup"] is True
+    assert feats["form_action_is_external"] is True
+    assert feats["form_submits_to_email"] is True
+    assert feats["form_action_is_empty_or_blank"] is False
+    # script src + link href both point off-domain -> 0.0 internal ratio
+    assert feats["internal_tag_link_ratio"] == 0.0
+
+
+def test_blank_form_action_flagged():
+    """An empty form action is flagged, and is not also counted as external."""
+    feats = extract_html_features(
+        _load("blank_form_action_page.html"), base_url="https://phish-login.net"
+    )
+    assert feats["form_action_is_empty_or_blank"] is True
+    assert feats["form_action_is_external"] is False
+
+
+def test_legit_page_has_no_behavioral_signals():
+    """The clean legit fixture trips none of the new behavioral checks."""
+    feats = extract_html_features(_load("legit_page.html"), base_url="https://example.com")
+    assert feats["has_onmouseover"] is False
+    assert feats["has_right_click_disabled"] is False
+    assert feats["has_suspicious_popup"] is False
+    assert feats["form_action_is_external"] is False
+    assert feats["form_submits_to_email"] is False
+    assert feats["form_action_is_empty_or_blank"] is False
+
+
+def test_internal_tag_link_ratio_no_tag_links_defaults_to_one():
+    """No <script src>/<link href> at all -> neutral default of 1.0."""
+    feats = extract_html_features("<html><body><p>hi</p></body></html>", base_url="https://x.com")
+    assert feats["internal_tag_link_ratio"] == 1.0
+
+
+# --------------------------------------------------------------------------- #
 # Unusable input
 # --------------------------------------------------------------------------- #
 @pytest.mark.parametrize("bad", [None, "", "   ", 123, []])
