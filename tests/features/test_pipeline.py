@@ -218,52 +218,21 @@ def test_to_model_input_non_numeric_treated_as_missing():
 
 
 # --------------------------------------------------------------------------- #
-# SSRF guard (_is_safe_fetch_url)
+# Hardened fetch (_fetch_html)
+#
+# The SSRF guard itself (src.utils.ssrf.is_safe_fetch_url) is unit-tested in
+# tests/utils/test_ssrf.py (Phase 6, Task 6.2 — extracted into its own
+# reusable module). These tests only verify _fetch_html's wiring to it.
 # --------------------------------------------------------------------------- #
 def _addrinfo(ip: str, port: int = 80):
     """Build a getaddrinfo-shaped result for a single IP."""
     return [(2, 1, 6, "", (ip, port))]
 
 
-def test_safe_url_allows_public_ip():
-    """A host resolving to a public IP is allowed."""
-    with mock.patch(f"{MODULE}.socket.getaddrinfo", return_value=_addrinfo("93.184.216.34")):
-        assert pipeline._is_safe_fetch_url("http://example.com") is True
+SSRF_MODULE = "src.utils.ssrf"
 
 
-@pytest.mark.parametrize(
-    "ip",
-    [
-        "127.0.0.1",        # loopback (e.g. localhost:6379 redis)
-        "10.0.0.5",         # private
-        "192.168.1.1",      # private
-        "169.254.169.254",  # link-local — cloud metadata endpoint
-        "0.0.0.0",          # unspecified
-    ],
-)
-def test_safe_url_blocks_internal_ips(ip):
-    """Hosts resolving to internal/metadata IPs are refused (SSRF)."""
-    with mock.patch(f"{MODULE}.socket.getaddrinfo", return_value=_addrinfo(ip)):
-        assert pipeline._is_safe_fetch_url(f"http://target/{ip}") is False
 
-
-@pytest.mark.parametrize("url", ["ftp://example.com/x", "file:///etc/passwd", "gopher://x"])
-def test_safe_url_blocks_non_http_schemes(url):
-    """Only http/https are permitted."""
-    assert pipeline._is_safe_fetch_url(url) is False
-
-
-def test_safe_url_blocks_unresolvable_host():
-    """A host that fails DNS resolution is refused."""
-    import socket as _socket
-
-    with mock.patch(f"{MODULE}.socket.getaddrinfo", side_effect=_socket.gaierror):
-        assert pipeline._is_safe_fetch_url("http://does-not-exist.invalid") is False
-
-
-# --------------------------------------------------------------------------- #
-# Hardened fetch (_fetch_html)
-# --------------------------------------------------------------------------- #
 class _FakeResponse:
     """Minimal stand-in for a streaming requests.Response."""
 
@@ -288,7 +257,7 @@ class _FakeResponse:
 def test_fetch_html_refuses_private_without_connecting():
     """A private-resolving URL is refused before any GET is issued."""
     with mock.patch(
-        f"{MODULE}.socket.getaddrinfo", return_value=_addrinfo("127.0.0.1")
+        f"{SSRF_MODULE}.socket.getaddrinfo", return_value=_addrinfo("127.0.0.1")
     ), mock.patch(f"{MODULE}._fetch_once") as fetch_once:
         result = pipeline._fetch_html("http://localhost:6379")
     assert result is None
@@ -299,7 +268,7 @@ def test_fetch_html_success_streams_body():
     """A safe URL returns the decoded, streamed body."""
     resp = _FakeResponse(chunks=[b"<html><title>hi", b"</title></html>"])
     with mock.patch(
-        f"{MODULE}.socket.getaddrinfo", return_value=_addrinfo("93.184.216.34")
+        f"{SSRF_MODULE}.socket.getaddrinfo", return_value=_addrinfo("93.184.216.34")
     ), mock.patch(f"{MODULE}._fetch_once", return_value=resp):
         out = pipeline._fetch_html("http://example.com")
     assert out is not None
@@ -311,7 +280,7 @@ def test_fetch_html_enforces_size_cap():
     """A body exceeding the byte cap yields None (no memory blowup)."""
     resp = _FakeResponse(chunks=[b"x" * 50])
     with mock.patch(f"{MODULE}._MAX_HTML_BYTES", 10), mock.patch(
-        f"{MODULE}.socket.getaddrinfo", return_value=_addrinfo("93.184.216.34")
+        f"{SSRF_MODULE}.socket.getaddrinfo", return_value=_addrinfo("93.184.216.34")
     ), mock.patch(f"{MODULE}._fetch_once", return_value=resp):
         out = pipeline._fetch_html("http://example.com")
     assert out is None
@@ -321,7 +290,7 @@ def test_fetch_html_blocks_redirect_to_private():
     """A redirect pointing at an internal IP is refused at the next hop."""
     redirect = _FakeResponse(status_code=302, headers={"Location": "http://127.0.0.1/"})
     addr = [_addrinfo("93.184.216.34"), _addrinfo("127.0.0.1")]
-    with mock.patch(f"{MODULE}.socket.getaddrinfo", side_effect=addr), mock.patch(
+    with mock.patch(f"{SSRF_MODULE}.socket.getaddrinfo", side_effect=addr), mock.patch(
         f"{MODULE}._fetch_once", return_value=redirect
     ):
         out = pipeline._fetch_html("http://example.com")
@@ -333,7 +302,7 @@ def test_fetch_html_follows_safe_redirect():
     redirect = _FakeResponse(status_code=302, headers={"Location": "http://example.com/final"})
     final = _FakeResponse(chunks=[b"<html>ok</html>"])
     with mock.patch(
-        f"{MODULE}.socket.getaddrinfo", return_value=_addrinfo("93.184.216.34")
+        f"{SSRF_MODULE}.socket.getaddrinfo", return_value=_addrinfo("93.184.216.34")
     ), mock.patch(f"{MODULE}._fetch_once", side_effect=[redirect, final]):
         out = pipeline._fetch_html("http://example.com")
     assert out == "<html>ok</html>"
@@ -343,7 +312,7 @@ def test_fetch_html_too_many_redirects():
     """Exceeding the redirect cap yields None."""
     redirect = _FakeResponse(status_code=302, headers={"Location": "http://example.com/x"})
     with mock.patch(
-        f"{MODULE}.socket.getaddrinfo", return_value=_addrinfo("93.184.216.34")
+        f"{SSRF_MODULE}.socket.getaddrinfo", return_value=_addrinfo("93.184.216.34")
     ), mock.patch(f"{MODULE}._fetch_once", return_value=redirect):
         out = pipeline._fetch_html("http://example.com")
     assert out is None

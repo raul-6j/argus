@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import logging
 import re
+import threading
+import time
 from concurrent.futures import (
     ThreadPoolExecutor,
     TimeoutError as FuturesTimeoutError,
@@ -43,6 +45,23 @@ RECENT_REGISTRATION_DAYS: int = 30
 
 # Default concurrency for the batch helper.
 DEFAULT_MAX_WORKERS: int = 8
+
+# Per-domain WHOIS result cache (Phase 6, Task 6.2). WHOIS is the slowest,
+# most rate-limit-sensitive lookup (CLAUDE.md gotcha: 500ms+), and the same
+# domain is often requested repeatedly in a short window (e.g. many URLs on
+# the same phishing-kit host). Registration data changes rarely, so a 6-hour
+# TTL trades a small amount of staleness for a large reduction in WHOIS
+# traffic. Thread-safe: extract_domain_intel_batch fans out across a thread
+# pool, so this cache is read/written from multiple threads concurrently.
+_WHOIS_CACHE_TTL_SECONDS: float = 6 * 60 * 60
+_whois_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+_whois_cache_lock = threading.Lock()
+
+
+def clear_whois_cache() -> None:
+    """Clear the WHOIS cache. Exposed for tests; not needed in normal use."""
+    with _whois_cache_lock:
+        _whois_cache.clear()
 
 # Canonical ordering of every feature this module produces.
 DOMAIN_INTEL_KEYS: tuple[str, ...] = (
@@ -195,6 +214,29 @@ def _whois_features(domain: str) -> dict[str, Any]:
     return features
 
 
+def _cached_whois_features(domain: str) -> dict[str, Any]:
+    """Thread-safe, 6-hour-TTL cache wrapper around :func:`_whois_features`.
+
+    Args:
+        domain: Registered domain (e.g. ``"example.com"``).
+
+    Returns:
+        A fresh copy of the cached (or newly-fetched) WHOIS feature dict —
+        copied so a caller mutating the result (e.g. ``.update()``) never
+        corrupts the cached entry for other callers.
+    """
+    now = time.monotonic()
+    with _whois_cache_lock:
+        cached = _whois_cache.get(domain)
+        if cached is not None and (now - cached[0]) < _WHOIS_CACHE_TTL_SECONDS:
+            return dict(cached[1])
+
+    result = _whois_features(domain)
+    with _whois_cache_lock:
+        _whois_cache[domain] = (now, result)
+    return dict(result)
+
+
 def _resolve(domain: str, rdtype: str) -> Optional[dns.resolver.Answer]:
     """Resolve a DNS record type with a bounded lifetime.
 
@@ -273,7 +315,7 @@ def extract_domain_intel(domain: Any) -> dict[str, Any]:
 
     domain = domain.strip().lower()
     try:
-        features = _whois_features(domain)
+        features = _cached_whois_features(domain)
         features.update(_dns_features(domain))
         return features
     except Exception as exc:  # noqa: BLE001 - top-level safety net (never crash)

@@ -1,0 +1,35 @@
+# ARGUS — Flask API configuration (Phase 6)
+# Loaded once by src/api/app.py::create_app() at process startup.
+
+# Model artefacts (Phase 5 output — git-ignored, must exist locally before
+# starting the API: run scripts/train.py + scripts/evaluate.py first).
+model_path: models/production/model.joblib
+model_metadata_path: models/production/metadata.json
+
+# CORS — locked to the extension origin only. Phase 7 fills in the real
+# unpacked/published extension ID; until then this is intentionally a
+# placeholder that will not match any real request (fails closed, not open).
+cors_origins:
+  - "chrome-extension://REPLACE_WITH_EXTENSION_ID"
+
+# flask-limiter. In-memory storage is fine for a single-process dev/thesis
+# deployment; point storage_uri at redis://... for a multi-worker production
+# deployment (gunicorn with >1 worker needs a shared store, or each worker
+# enforces its own independent limit).
+rate_limit: "100 per minute"
+rate_limit_storage_uri: "memory://"
+
+# Enrichment (HTML fetch + WHOIS/DNS) is OFF by default — it's the slow path
+# (seconds, not milliseconds) and turns /detect into a live outbound fetch of
+# untrusted content. Callers opt in per-request via {"enrich": true}.
+enrich_default: false
+ssrf_timeout_s: 5
+
+# Persistent thread pool for enrichment work (Task 6.2) — sized to bound
+# worst-case concurrent WHOIS/HTML fetches without spawning unboundedly.
+enrichment_max_workers: 8
+
+# Decision threshold — kept in sync with configs/model_config.yaml (DEC-017)
+# rather than duplicated as a second source of truth; app.py reads it from
+# model_config.yaml at startup. Present here only as a documented pointer.
+threshold_source: configs/model_config.yaml

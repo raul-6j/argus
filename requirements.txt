@@ -18,6 +18,10 @@ dnspython==2.6.1
 
 # --- API ---
 Flask==3.0.3
+flask-cors==6.0.5
+Flask-Limiter==3.11.0  # in-memory storage by default (see configs/api_config.yaml);
+                        # point rate_limit_storage_uri at redis:// for multi-worker prod
+marshmallow==4.0.1
 
 # --- Serialization / config ---
 joblib==1.4.2

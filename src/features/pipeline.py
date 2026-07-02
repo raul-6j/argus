@@ -17,9 +17,7 @@ from ``configs/feature_config.yaml``).
 
 from __future__ import annotations
 
-import ipaddress
 import logging
-import socket
 import time
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from dataclasses import dataclass, field
@@ -33,6 +31,7 @@ import yaml
 
 from src.features import domain_intel, html_content, lexical
 from src.utils.domains import registered_domain as _registered_domain
+from src.utils.ssrf import is_safe_fetch_url
 from src.utils.timeout import call_with_timeout
 
 logger = logging.getLogger(__name__)
@@ -49,7 +48,6 @@ _FETCH_HEADERS = {"User-Agent": "ARGUS-FeatureBot/0.1 (+phishing-detection)"}
 _MAX_HTML_BYTES: int = 5 * 1024 * 1024  # 5 MiB
 # Redirects are followed manually so each hop can be SSRF-validated.
 _MAX_REDIRECTS: int = 3
-_ALLOWED_SCHEMES = frozenset({"http", "https"})
 
 # Every feature key the extractors are capable of producing.
 _KNOWN_FEATURE_KEYS: frozenset[str] = frozenset(
@@ -147,55 +145,6 @@ class FeatureVector:
         return np.array(values, dtype=float)
 
 
-def _is_safe_fetch_url(url: str) -> bool:
-    """Return whether ``url`` is safe to fetch (SSRF guard).
-
-    The URL is untrusted input in a phishing-detection API. We allow only
-    http/https and refuse any host that resolves to a private, loopback,
-    link-local, reserved, multicast, or unspecified address — which blocks
-    cloud metadata endpoints (169.254.169.254) and internal services
-    (localhost, 10.0.0.0/8, etc).
-
-    Note: there is an unavoidable TOCTOU gap — the OS re-resolves the host when
-    the connection is made, so a fast-flipping DNS record could still point
-    elsewhere. This check raises the bar substantially but is not a complete
-    defence; a production deployment should also pin the validated IP.
-
-    Args:
-        url: The URL to validate.
-
-    Returns:
-        ``True`` if the URL appears safe to fetch, else ``False``.
-    """
-    parsed = urlparse(url)
-    if parsed.scheme.lower() not in _ALLOWED_SCHEMES:
-        return False
-    host = parsed.hostname
-    if not host:
-        return False
-    try:
-        infos = socket.getaddrinfo(host, parsed.port or None, proto=socket.IPPROTO_TCP)
-    except socket.gaierror:
-        return False
-    for info in infos:
-        ip_str = info[4][0]
-        try:
-            ip = ipaddress.ip_address(ip_str)
-        except ValueError:
-            return False
-        if (
-            ip.is_private
-            or ip.is_loopback
-            or ip.is_link_local
-            or ip.is_reserved
-            or ip.is_multicast
-            or ip.is_unspecified
-        ):
-            logger.warning("Refusing to fetch %r — resolves to blocked IP %s", url, ip)
-            return False
-    return True
-
-
 def _read_capped_body(response: Any) -> Optional[str]:
     """Read a streamed response body up to :data:`_MAX_HTML_BYTES`.
 
@@ -250,7 +199,7 @@ def _fetch_html(url: str) -> Optional[str]:
     current = url
     try:
         for _ in range(_MAX_REDIRECTS + 1):
-            if not _is_safe_fetch_url(current):
+            if not is_safe_fetch_url(current):
                 logger.warning("HTML fetch refused for unsafe URL: %r", current)
                 return None
             response = call_with_timeout(_fetch_once, _FETCH_TIMEOUT, current)

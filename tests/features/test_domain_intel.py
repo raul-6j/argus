@@ -22,6 +22,16 @@ from src.features.domain_intel import (
 MODULE = "src.features.domain_intel"
 
 
+@pytest.fixture(autouse=True)
+def _clear_whois_cache():
+    """Prevent the 6-hour WHOIS cache (Phase 6, Task 6.2) from leaking mocked
+    results between tests — many tests reuse "example.com" with different
+    mocked whois.whois return values."""
+    domain_intel.clear_whois_cache()
+    yield
+    domain_intel.clear_whois_cache()
+
+
 # --------------------------------------------------------------------------- #
 # Fakes / helpers
 # --------------------------------------------------------------------------- #
@@ -309,3 +319,66 @@ def test_batch_isolates_per_domain_failure():
     assert results["good.com"]["domain_age_days"] == 10
     assert results["bad.com"]["domain_age_days"] == -1
     assert "bad.com" in results
+
+
+# --------------------------------------------------------------------------- #
+# WHOIS cache (Phase 6, Task 6.2)
+# --------------------------------------------------------------------------- #
+def test_whois_cache_avoids_second_lookup():
+    """A second call for the same domain within the TTL does not re-query WHOIS."""
+    record = _fake_whois_record(datetime.utcnow() - timedelta(days=10), None, "R")
+
+    with mock.patch(f"{MODULE}.whois.whois", return_value=record) as mwhois, mock.patch(
+        f"{MODULE}.dns.resolver.resolve",
+        side_effect=_patch_dns(a_records=["1.2.3.4"]),
+    ):
+        extract_domain_intel("cached.com")
+        extract_domain_intel("cached.com")
+
+    mwhois.assert_called_once()
+
+
+def test_whois_cache_expires_after_ttl():
+    """After the TTL elapses, WHOIS is queried again."""
+    record = _fake_whois_record(datetime.utcnow() - timedelta(days=10), None, "R")
+
+    with mock.patch(f"{MODULE}.whois.whois", return_value=record) as mwhois, mock.patch(
+        f"{MODULE}.dns.resolver.resolve",
+        side_effect=_patch_dns(a_records=["1.2.3.4"]),
+    ), mock.patch(f"{MODULE}._WHOIS_CACHE_TTL_SECONDS", 0.01):
+        extract_domain_intel("expiring.com")
+        import time
+
+        time.sleep(0.02)
+        extract_domain_intel("expiring.com")
+
+    assert mwhois.call_count == 2
+
+
+def test_whois_cache_is_per_domain():
+    """Different domains do not share a cache entry."""
+    record = _fake_whois_record(datetime.utcnow() - timedelta(days=10), None, "R")
+
+    with mock.patch(f"{MODULE}.whois.whois", return_value=record) as mwhois, mock.patch(
+        f"{MODULE}.dns.resolver.resolve",
+        side_effect=_patch_dns(a_records=["1.2.3.4"]),
+    ):
+        extract_domain_intel("one.com")
+        extract_domain_intel("two.com")
+
+    assert mwhois.call_count == 2
+
+
+def test_clear_whois_cache_forces_refetch():
+    """clear_whois_cache() makes the next call hit WHOIS again."""
+    record = _fake_whois_record(datetime.utcnow() - timedelta(days=10), None, "R")
+
+    with mock.patch(f"{MODULE}.whois.whois", return_value=record) as mwhois, mock.patch(
+        f"{MODULE}.dns.resolver.resolve",
+        side_effect=_patch_dns(a_records=["1.2.3.4"]),
+    ):
+        extract_domain_intel("clearme.com")
+        domain_intel.clear_whois_cache()
+        extract_domain_intel("clearme.com")
+
+    assert mwhois.call_count == 2
