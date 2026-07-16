@@ -45,3 +45,32 @@ subdomain_per_tenant_platforms:
   - repl.co
   - glitch.me
   - 000webhostapp.com
+
+# --- Automated multi-feed ingestion (Phase 1, D1) ---------------------------
+# `scripts/refresh_threat_feeds.py` downloads each feed below, normalizes it
+# to the same (url, verified, online) schema `phishtank_snapshot_path`
+# already uses, dedupes across feeds, and writes a dated snapshot into
+# `feeds_dir` plus an `active_snapshot.txt` pointer. On the *next* process
+# start, `src/api/app.py::_resolve_threat_feed_snapshot` prefers that
+# pointer over the manually-pinned `phishtank_snapshot_path` above — so
+# running the refresh script and restarting the API is enough to pick up
+# fresher data, no code change needed. Never auto-reloads mid-process (the
+# prefilter index is still loaded once at startup, matching the existing
+# "load once, not per-request" convention).
+feeds_dir: data/raw/feeds
+
+feeds:
+  - name: phishtank
+    parser: phishtank
+    url: "http://data.phishtank.com/data/online-valid.csv"
+  - name: openphish
+    parser: openphish
+    url: "https://openphish.com/feed.txt"
+  - name: urlhaus
+    parser: urlhaus
+    url: "https://urlhaus.abuse.ch/downloads/csv_recent/"
+
+# Documentation only -- refresh_threat_feeds.py takes no schedule argument
+# itself; wire it into cron / a GitHub Actions schedule / a systemd timer at
+# deploy time, per docs/PHASE_1_IMPLEMENTATION_PLAN.md.
+refresh_cadence: "daily"

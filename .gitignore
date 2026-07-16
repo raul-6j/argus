@@ -48,6 +48,8 @@ reports/.test_set_access_log.json
 # --- Data files (raw downloads and processed splits — never commit large datasets) ---
 data/raw/*.csv
 data/raw/*.arff
+data/raw/feeds/*.csv
+data/raw/feeds/active_snapshot.txt
 data/processed/*.parquet
 data/processed/*.csv
 data/processed/*.json
