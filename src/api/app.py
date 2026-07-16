@@ -25,16 +25,22 @@ from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
+from src.api.auth.api_key_routes import auth_api_keys_bp
 from src.api.auth.routes import auth_bp
 from src.api.auth.utils import get_secret_key
 from src.api.db import create_db_engine, create_session_factory, init_db
 from src.api.detect import detect_bp
 from src.api.health import health_bp
+from src.api.public.routes import public_bp
+from src.api.scan.routes import scan_bp
 from src.api.threat_intel.phishtank import load_phishtank_hostname_index, load_phishtank_index
 from src.api.vault.routes import vault_bp
+from src.api.webapp_routes import webapp_bp
 from src.detection.brand_reference import load_brand_index
 from src.models.contract import FEATURE_ORDER
 from src.models.explain import build_explainer, explain_single
+from src.serving.cache import build_cache
+from src.serving.onnx_runtime import load_predictor
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +129,63 @@ def _resolve_threat_feed_snapshot(config: dict[str, Any]) -> Path:
                     exc,
                 )
     return PROJECT_ROOT / config["phishtank_snapshot_path"]
+
+
+# Bounds every Redis socket operation (connect AND read/write) for both the
+# boot-time check below and the rate limiter's own connection (see
+# create_app()'s `storage_options` passed to Limiter). Deliberately
+# explicit: the redis-py client has no timeout by default, and a Redis
+# process that hangs (rather than cleanly refusing) would otherwise block
+# every request indefinitely -- discovered during Phase 2 validation, when
+# a mid-session Redis failure test hung the whole test process rather than
+# failing fast (see docs/DECISIONS.md DEC-027).
+_REDIS_SOCKET_TIMEOUT_S = 3.0
+
+
+def _connect_redis_or_fail(storage_uri: str) -> Optional[Any]:
+    """Ping Redis at boot if configured; fail loud rather than silently
+    unenforced (Phase 2, G2).
+
+    Mirrors S6's SECRET_KEY fail-closed philosophy: a rate limiter that
+    silently falls back to "no limit" on a Redis outage is worse than one
+    that refuses to start, since the operator would have no signal that
+    every rate limit in the app just stopped being enforced. ``memory://``
+    (the dev default) skips this entirely -- no Redis dependency in dev.
+
+    Args:
+        storage_uri: The configured ``rate_limit_storage_uri``.
+
+    Returns:
+        A connected ``redis.Redis`` client if ``storage_uri`` is a redis
+        URL, else ``None`` (memory:// or any other backend).
+
+    Raises:
+        RuntimeError: If ``storage_uri`` is a redis URL but the server is
+            unreachable (including "connected but not responding within
+            ``_REDIS_SOCKET_TIMEOUT_S``" -- a hang, not just a refusal).
+    """
+    if not storage_uri.startswith("redis://") and not storage_uri.startswith("rediss://"):
+        return None
+
+    import redis as redis_lib
+
+    client = redis_lib.Redis.from_url(
+        storage_uri,
+        socket_connect_timeout=_REDIS_SOCKET_TIMEOUT_S,
+        socket_timeout=_REDIS_SOCKET_TIMEOUT_S,
+    )
+    try:
+        client.ping()
+    except Exception as exc:  # noqa: BLE001 - re-raised deliberately below
+        raise RuntimeError(
+            f"rate_limit_storage_uri is set to {storage_uri!r} but Redis is unreachable "
+            f"({exc}) -- refusing to start rather than silently running with unenforced "
+            "rate limits. Fix Redis connectivity, or switch back to memory:// for a "
+            "single-process dev deployment."
+        ) from exc
+
+    logger.info("Connected to Redis at %s for rate limiting / caching.", storage_uri)
+    return client
 
 
 def _load_detection(config_path: Path) -> dict[str, Any]:
@@ -283,8 +346,18 @@ def create_app(
         Path(detection_config_path) if detection_config_path else _DEFAULT_DETECTION_CONFIG_PATH
     )
 
+    # Phase 2 (G1): an optional, numerically-validated ONNX inference path
+    # for the hot predict_proba call. /explain and /v1/explain deliberately
+    # keep using `pipeline` (the sklearn model) directly for SHAP, which
+    # depends on the sklearn internals -- `predictor` is only for the
+    # plain phishing-probability computation on /detect, /scan, /v1/scan(/batch).
+    serving_config = model_config.get("serving", {})
+    onnx_path = PROJECT_ROOT / serving_config["onnx_path"] if serving_config.get("onnx_path") else None
+    predictor = load_predictor(serving_config.get("backend", "sklearn"), onnx_path, pipeline)
+
     app.extensions["argus"] = {
         "pipeline": pipeline,
+        "predictor": predictor,
         "explainer": explainer,
         "model_type": model_type,
         "threshold": model_config.get("threshold", 0.5),
@@ -297,15 +370,41 @@ def create_app(
     app.register_blueprint(health_bp)
     app.register_blueprint(detect_bp)
     app.register_blueprint(auth_bp)
+    app.register_blueprint(auth_api_keys_bp)
     app.register_blueprint(vault_bp)
+    app.register_blueprint(scan_bp)
+    app.register_blueprint(public_bp)
+    app.register_blueprint(webapp_bp)
 
     CORS(app, resources={r"/*": {"origins": api_config.get("cors_origins", [])}})
+
+    rate_limit_storage_uri = api_config.get("rate_limit_storage_uri", "memory://")
+    redis_client = _connect_redis_or_fail(rate_limit_storage_uri)
+    app.extensions["argus"]["redis_client"] = redis_client
+
+    # Phase 2 (G1): points at the same Redis *server* the rate limiter
+    # below uses (not a shared client object -- Limiter's `storage_uri`
+    # makes its own independent connection internally via the `limits`
+    # library, same as this one does via _connect_redis_or_fail; two
+    # separate connections to one server is normal and cheap, not wasteful).
+    # Falls back to an in-process cache when redis_client is None (memory://
+    # dev mode).
+    app.extensions["argus"]["cache"] = build_cache(api_config, redis_client)
 
     limiter = Limiter(
         key_func=get_remote_address,
         app=app,
         default_limits=[api_config.get("rate_limit", "100 per minute")],
-        storage_uri=api_config.get("rate_limit_storage_uri", "memory://"),
+        storage_uri=rate_limit_storage_uri,
+        # Bounds the limiter's own (separate) Redis connection the same way
+        # _connect_redis_or_fail's boot-time check is bounded -- without
+        # this, a hung (not just refused) Redis leaves every request
+        # blocked indefinitely instead of failing fast. No effect when
+        # storage_uri is memory:// (the option is simply unused).
+        storage_options={
+            "socket_connect_timeout": _REDIS_SOCKET_TIMEOUT_S,
+            "socket_timeout": _REDIS_SOCKET_TIMEOUT_S,
+        },
     )
     app.extensions["argus"]["limiter"] = limiter
 
@@ -332,6 +431,28 @@ def create_app(
             app.view_functions[endpoint]
         )
 
+    # Phase 2 (C1): /scan does a real outbound fetch of a user-supplied URL
+    # and is public/unauthenticated -- a dedicated, stricter limit than the
+    # global default, same retrofit pattern as the auth routes above.
+    app.view_functions["scan.create_scan"] = limiter.limit(
+        api_config.get("scan_rate_limit", "20 per minute")
+    )(app.view_functions["scan.create_scan"])
+
+    # Phase 2 (C3): key management is JWT-authenticated but still worth a
+    # dedicated cap -- a stolen access token shouldn't be able to mint an
+    # unbounded number of API keys.
+    api_key_mgmt_limit = api_config.get("api_key_mgmt_rate_limit", "20 per minute")
+    for endpoint in ("auth_api_keys.create_api_key", "auth_api_keys.list_api_keys", "auth_api_keys.revoke_api_key"):
+        app.view_functions[endpoint] = limiter.limit(api_key_mgmt_limit)(app.view_functions[endpoint])
+
+    # Phase 2 (C3): /v1/* endpoints are limited per-API-key (not per-IP) --
+    # wired inside src.api.public.routes itself via a dynamic key_func,
+    # since the limit *value* depends on the caller's tier, which isn't
+    # known until the key is verified. See public/routes.py::_configure_limits.
+    from src.api.public.routes import configure_limits as _configure_public_limits
+
+    _configure_public_limits(app, limiter, api_config)
+
     @app.errorhandler(404)
     def _not_found(_exc):
         return jsonify(error="not found"), 404
@@ -339,6 +460,22 @@ def create_app(
     @app.errorhandler(429)
     def _rate_limited(_exc):
         return jsonify(error="rate limit exceeded"), 429
+
+    # Phase 2 (G2): a Redis outage *after* boot (the boot-time check above
+    # only catches an outage at startup) makes flask-limiter propagate a
+    # raw redis.exceptions.RedisError out of its before_request hook --
+    # correctly fail-closed (the request never reaches the view, so no
+    # limit is silently bypassed) but, uncaught, that's an ugly unhandled
+    # 500/HTML error rather than a clean, intentional response. Mapped to
+    # 503 here: "rate limiting is temporarily unavailable, try again" is
+    # the honest, correct status for this condition, and keeps every error
+    # response in the API JSON-shaped, matching every other error path.
+    import redis as _redis_lib
+
+    @app.errorhandler(_redis_lib.exceptions.RedisError)
+    def _rate_limit_backend_unavailable(_exc):
+        logger.error("Rate limiter's Redis backend is unreachable mid-session: %s", _exc)
+        return jsonify(error="rate limiting temporarily unavailable"), 503
 
     return app
 

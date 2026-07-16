@@ -25,6 +25,7 @@ from src.features import page_artifacts
 from src.features.pipeline import extract_features
 from src.models.explain import explain_single
 from src.models.feature_adapter import adapt_to_training_contract
+from src.serving.cache import cache_key
 from src.utils.validators import validate_url
 
 logger = logging.getLogger(__name__)
@@ -133,6 +134,10 @@ def detect():
 
     threat_intel = argus.get("threat_intel", {})
     if threat_intel.get("enabled"):
+        # Always checked BEFORE any cache lookup below -- a URL already
+        # known-bad short-circuits regardless of what might be cached for
+        # it, so a newly-blocklisted URL is never masked by a stale cached
+        # "legitimate" verdict (Phase 2, G1).
         source = check_prefilter(
             url,
             threat_intel["phishtank_index"],
@@ -149,9 +154,16 @@ def detect():
                 latency_ms=latency_ms,
             )
 
+    cache = argus.get("cache")
+    key = cache_key(url, data["enrich"]) if cache is not None else None
+    cached = cache.get(key) if cache is not None else None
+    if cached is not None:
+        latency_ms = round((time.perf_counter() - start) * 1000, 3)
+        return jsonify(url=url, latency_ms=latency_ms, **cached)
+
     fv, artifacts = _extract_with_bound(url, data["enrich"])
     model_input = adapt_to_training_contract(fv.features)
-    proba = float(argus["pipeline"].predict_proba([model_input.to_vector()])[0][1])
+    proba = float(argus["predictor"].predict_proba([model_input.to_vector()])[0][1])
 
     # Detection fusion layer (Phase 1, DEC-A) only runs on the enriched
     # path — page-dependent signals (favicon match, brand mismatch) need
@@ -181,6 +193,10 @@ def detect():
         response["confidence"] = float(proba if is_phishing else 1 - proba)
         response["verdict"] = label
         response["source"] = "model"
+
+    if cache is not None:
+        cacheable = {k: v for k, v in response.items() if k not in ("url", "latency_ms")}
+        cache.set(key, cacheable)
 
     response["latency_ms"] = round((time.perf_counter() - start) * 1000, 3)
     return jsonify(**response)
@@ -221,7 +237,7 @@ def explain():
     # for /explain, even when the fusion layer is disabled — falls back to
     # a SHAP-only sentence with no signals in that case.
     detection_state = argus.get("detection", {})
-    proba = float(argus["pipeline"].predict_proba([model_input.to_vector()])[0][1])
+    proba = float(argus["predictor"].predict_proba([model_input.to_vector()])[0][1])
     if detection_state.get("enabled"):
         fused = run_detection(
             url,

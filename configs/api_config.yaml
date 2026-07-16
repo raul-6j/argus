@@ -20,8 +20,49 @@ cors_origins:
 # deployment; point storage_uri at redis://... for a multi-worker production
 # deployment (gunicorn with >1 worker needs a shared store, or each worker
 # enforces its own independent limit).
+#
+# Phase 2 (G2): when storage_uri starts with "redis://", create_app() pings
+# Redis at boot and REFUSES TO START if it's unreachable -- "fail loud" so a
+# misconfigured/down Redis never silently degrades every rate limit to
+# unenforced. This mirrors S6's SECRET_KEY fail-closed philosophy. Dev stays
+# on memory:// (no boot-time check, no Redis dependency) unless explicitly
+# switched to redis:// here.
 rate_limit: "100 per minute"
 rate_limit_storage_uri: "memory://"
+# rate_limit_storage_uri: "redis://localhost:6379/0"   # prod / multi-worker
+
+# Phase 2 (C1): dedicated, stricter limit for the public scan endpoint --
+# it triggers a real outbound fetch of a user-supplied URL, unlike /detect's
+# default (hostname-only, no fetch) fast path.
+scan_rate_limit: "20 per minute"
+
+# Phase 2 (C3): per-API-key tiered limits for /v1/*, keyed on the api-key's
+# id (not remote IP) so limits are per-tenant regardless of shared egress
+# IPs. Requires the redis storage_uri above to actually hold across workers
+# -- see docs/PHASE_2_IMPLEMENTATION_PLAN.md §G2.
+api_key_tiers:
+  free: "60 per minute"
+  pro: "600 per minute"
+
+# Phase 2 (C1): how long a public scan report stays fetchable at its
+# permalink before GET /scan/<id> starts returning 404.
+scan_store:
+  ttl_days: 7
+
+# Phase 2 (C3): max URLs accepted in one POST /v1/scan/batch request. Each
+# URL in a batch counts individually against the caller's per-key rate
+# budget (documented in docs/API_DESIGN_SPECIFICATION.md) so batching can't
+# be used to bypass the tier limit.
+batch_max: 50
+
+# Phase 2 (G1): short-TTL verdict cache (src/serving/cache.py), keyed on
+# normalize_url(url)+enrich. Reuses the Redis instance above when
+# rate_limit_storage_uri is redis://; falls back to an in-process LRU cache
+# in dev. The threat-intel prefilter always runs BEFORE the cache lookup,
+# so a newly-blocklisted URL is never masked by a stale cached "legitimate".
+cache:
+  enabled: true
+  ttl_s: 300
 
 # Enrichment (HTML fetch + WHOIS/DNS) is OFF by default — it's the slow path
 # (seconds, not milliseconds) and turns /detect into a live outbound fetch of

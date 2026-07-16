@@ -47,6 +47,13 @@ def app():
         "signup": "10000 per minute",
         "verify_otp": "10000 per minute",
     }
+    # Phase 2 (G1): this app is session-scoped and shared by every test in
+    # tests/api/ -- a real verdict cache would leak a mocked extract_features
+    # result from one test's URL into a later test mocking the same URL
+    # differently. Cache correctness itself is covered by dedicated tests in
+    # tests/serving/test_cache.py; disabled here purely for test isolation,
+    # matching how auth_rate_limits above is relaxed for the same reason.
+    api_config["cache"] = {"enabled": False}
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as fh:
         yaml.safe_dump(api_config, fh)

@@ -24,8 +24,10 @@ coverage.xml
 # --- Serialized models (Iron Law #5) ---
 models/*.pkl
 models/*.joblib
+models/*.onnx
 models/**/*.pkl
 models/**/*.joblib
+models/**/*.onnx
 models/**/*.json
 models/latest/
 
@@ -40,6 +42,9 @@ reports/.test_set_access_log.json
 # --- Auth/vault database (Phase 8) — local dev data, never commit ---
 *.db
 *.db-journal
+
+# --- Local Redis persistence (Phase 2, G2/G1 dev use) ---
+dump.rdb
 
 # --- Caches ---
 /tmp/tldextract_cache/

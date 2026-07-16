@@ -27,6 +27,16 @@ flask-cors==6.0.5
 Flask-Limiter==3.11.0  # in-memory storage by default (see configs/api_config.yaml);
                         # point rate_limit_storage_uri at redis:// for multi-worker prod
 marshmallow==4.0.1
+redis==7.0.1            # backs flask-limiter's storage_uri=redis://... (Phase 2, G2) and
+                         # the verdict cache (Phase 2, G1, src/serving/cache.py)
+
+# --- Testing (Phase 2 additions) ---
+fakeredis==2.36.2       # in-process Redis stand-in for G2/G1 tests -- no real Redis needed in CI
+
+# --- Model serving (Phase 2, G1) ---
+skl2onnx==1.20.0         # sklearn Pipeline -> ONNX export (scripts/export_onnx.py)
+onnx==1.19.1
+onnxruntime==1.19.2      # ONNX inference runtime (src/serving/onnx_runtime.py)
 
 # --- Auth + vault (Phase 8) ---
 SQLAlchemy==2.0.51
