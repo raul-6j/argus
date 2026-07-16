@@ -50,6 +50,10 @@ _AXIS_WEIGHTS: dict[str, float] = {
 }
 
 _META_BRAND_PROPERTIES = ("og:site_name", "application-name", "twitter:site")
+# Precompiled once at import time -- this signal runs on the hot enriched
+# request path, and the pattern set is fixed, so there is no reason to
+# recompile the same 3 small regexes on every evaluate() call.
+_META_BRAND_PATTERNS = [re.compile(f"^{re.escape(p)}$", re.IGNORECASE) for p in _META_BRAND_PROPERTIES]
 
 
 def _extract_page_brand_tokens(html: str) -> set[str]:
@@ -64,8 +68,7 @@ def _extract_page_brand_tokens(html: str) -> set[str]:
     if soup.title and soup.title.get_text(strip=True):
         tokens.add(soup.title.get_text(strip=True).lower())
 
-    for prop_name in _META_BRAND_PROPERTIES:
-        pattern = re.compile(f"^{re.escape(prop_name)}$", re.IGNORECASE)
+    for pattern in _META_BRAND_PATTERNS:
         tag = soup.find("meta", attrs={"property": pattern}) or soup.find(
             "meta", attrs={"name": pattern}
         )

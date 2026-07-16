@@ -44,7 +44,11 @@ logger = logging.getLogger(__name__)
 _SIGNAL_NAME = "favicon_match"
 _FAVICON_FETCH_TIMEOUT: float = 3.0
 _MAX_FAVICON_BYTES: int = 512 * 1024  # 512 KiB — favicons are always tiny
-_DEFAULT_PHASH_TOLERANCE = 8  # Hamming distance out of 64 bits (~12.5%)
+_DEFAULT_PHASH_TOLERANCE = 3  # Hamming distance out of 64 bits — see
+# configs/detection_config.yaml's phash_tolerance comment for the empirical
+# basis: 8 (the previous value) sat exactly at the closest observed
+# distance between two *unrelated* real brand favicons and produced live
+# false positives; 3 has a 5-bit safety margin below that measured minimum.
 _EXACT_MATCH_SCORE = 0.97
 
 
@@ -83,38 +87,65 @@ def _decode_data_uri(favicon_url: str) -> Optional[bytes]:
         return None
 
 
+_MAX_FAVICON_REDIRECTS = 3
+
+
 def _fetch_favicon_bytes(favicon_url: str) -> Optional[bytes]:
-    """Fetch favicon bytes, SSRF-guarded and size-capped. Never raises."""
-    if favicon_url.lower().startswith("data:"):
-        return _decode_data_uri(favicon_url)
+    """Fetch favicon bytes, SSRF-guarded and size-capped. Never raises.
 
-    if not is_safe_fetch_url(favicon_url):
-        logger.warning("Favicon fetch refused for unsafe URL: %r", favicon_url)
-        return None
-
+    Redirects are followed manually (``allow_redirects=False``) with the
+    SSRF guard re-checked on every hop -- ``requests``' default
+    auto-follow-redirects behavior would validate only the initial URL and
+    then silently follow a 3xx response anywhere, including to a private/
+    internal address, exactly the "SSRF via open redirect" case
+    ``src.utils.ssrf`` exists to close on every other fetch path in this
+    codebase (see ``src.features.pipeline._fetch_html`` and
+    ``src.features.page_artifacts.fetch``).
+    """
+    current = favicon_url
     try:
         import requests
 
-        def _get():
-            return requests.get(favicon_url, timeout=_FAVICON_FETCH_TIMEOUT, stream=True)
+        for _ in range(_MAX_FAVICON_REDIRECTS + 1):
+            if current.lower().startswith("data:"):
+                return _decode_data_uri(current)
 
-        response = call_with_timeout(_get, _FAVICON_FETCH_TIMEOUT)
-        try:
-            if response.status_code != 200:
+            if not is_safe_fetch_url(current):
+                logger.warning("Favicon fetch refused for unsafe URL: %r", current)
                 return None
-            total = 0
-            chunks: list[bytes] = []
-            for chunk in response.iter_content(chunk_size=4096):
-                if not chunk:
+
+            def _get(url=current):
+                return requests.get(
+                    url, timeout=_FAVICON_FETCH_TIMEOUT, stream=True, allow_redirects=False
+                )
+
+            response = call_with_timeout(_get, _FAVICON_FETCH_TIMEOUT)
+            try:
+                if response.status_code in (301, 302, 303, 307, 308):
+                    location = response.headers.get("Location")
+                    if not location:
+                        return None
+                    current = urljoin(current, location)
                     continue
-                total += len(chunk)
-                if total > _MAX_FAVICON_BYTES:
-                    logger.warning("Favicon exceeded %d bytes; aborting", _MAX_FAVICON_BYTES)
+
+                if response.status_code != 200:
                     return None
-                chunks.append(chunk)
-            return b"".join(chunks)
-        finally:
-            response.close()
+                total = 0
+                chunks: list[bytes] = []
+                for chunk in response.iter_content(chunk_size=4096):
+                    if not chunk:
+                        continue
+                    total += len(chunk)
+                    if total > _MAX_FAVICON_BYTES:
+                        logger.warning("Favicon exceeded %d bytes; aborting", _MAX_FAVICON_BYTES)
+                        return None
+                    chunks.append(chunk)
+                return b"".join(chunks)
+            finally:
+                response.close()
+
+        logger.warning("Too many redirects fetching favicon %r", favicon_url)
+        return None
     except Exception as exc:  # noqa: BLE001 - Iron Law #3
         logger.warning("Favicon fetch failed for %r: %s", favicon_url, exc)
         return None

@@ -83,10 +83,21 @@ def mmh3_32(data: bytes, seed: int = 0) -> int:
     return h1
 
 
+# Reject images larger than this before decoding pixel data. A favicon is
+# never legitimately bigger than a few hundred pixels per side; this exists
+# to stop a decompression-bomb image (huge pixel dimensions, tiny compressed
+# size -- easily under the caller's byte-size fetch cap) from forcing a
+# large in-memory decode. PIL's own MAX_IMAGE_PIXELS safety net only *warns*
+# below ~179M pixels and only raises above it -- too permissive on its own
+# for untrusted input on a request path.
+_MAX_IMAGE_DIMENSION_PIXELS = 4096 * 4096
+
+
 def average_hash(image_bytes: bytes, hash_size: int = 8) -> Optional[int]:
     """Compute a ``hash_size**2``-bit average hash ("aHash") of an image.
 
-    Never raises (Iron Law #3) — an undecodable image yields ``None``.
+    Never raises (Iron Law #3) — an undecodable image, or one whose declared
+    dimensions exceed :data:`_MAX_IMAGE_DIMENSION_PIXELS`, yields ``None``.
 
     Args:
         image_bytes: Raw image bytes, any Pillow-supported format
@@ -98,12 +109,22 @@ def average_hash(image_bytes: bytes, hash_size: int = 8) -> Optional[int]:
 
     Returns:
         An integer in ``[0, 2**(hash_size**2))``, or ``None`` if the image
-        could not be decoded.
+        could not be decoded or was rejected as oversized.
     """
     try:
         from PIL import Image
 
         with Image.open(io.BytesIO(image_bytes)) as img:
+            # img.size reads only the header (no pixel decode yet) -- safe
+            # to check before the expensive .convert()/.resize() below.
+            width, height = img.size
+            if width * height > _MAX_IMAGE_DIMENSION_PIXELS:
+                logger.warning(
+                    "average_hash: image %dx%d exceeds pixel cap; refusing to decode",
+                    width,
+                    height,
+                )
+                return None
             img = img.convert("L").resize((hash_size, hash_size), Image.LANCZOS)
             pixels = list(img.getdata())
     except Exception as exc:  # noqa: BLE001 - undecodable image -> None, never crash

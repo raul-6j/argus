@@ -66,6 +66,22 @@ class TestAverageHash:
     def test_empty_bytes_returns_none(self):
         assert average_hash(b"") is None
 
+    def test_oversized_image_dimensions_refused_before_decode(self):
+        """A decompression-bomb-shaped image: 20 megapixels (well above the
+        16.7M-pixel cap) but a solid color, so it compresses to ~66KB --
+        comfortably under favicon_match.py's 512 KiB *download* cap, which
+        therefore cannot be relied on alone to stop an oversized decode.
+        Must be rejected from its header (no pixel decode) instead."""
+        from PIL import Image
+
+        img = Image.new("RGB", (5000, 4000), color=(1, 2, 3))
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        bomb_bytes = buf.getvalue()
+        assert len(bomb_bytes) < 512 * 1024  # would pass the production download cap
+
+        assert average_hash(bomb_bytes) is None
+
     def test_custom_hash_size(self):
         h = average_hash(self._make_png_bytes(), hash_size=4)
         assert h is not None

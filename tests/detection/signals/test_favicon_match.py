@@ -87,6 +87,88 @@ class TestSoftMatch:
         assert sig.evidence["match_type"] == "perceptual_hash"
 
 
+class TestRealWorldFalsePositiveRegression:
+    """Regression test for a real false positive found during Phase 1
+    validation (16 Jul 2026), reproduced live with phash_tolerance=8 (the
+    original default):
+
+    * Bank of America's real, live-resolved favicon (its homepage's actual
+      <link rel="icon"> points to a higher-res apple-touch-icon variant,
+      hash 0xffff830081e3ffff -- distinct from the plain /favicon.ico hash
+      scripts/build_brand_reference.py stored for it) landed at Hamming
+      distance 8 from Apple's *stored* reference hash and was flagged
+      phishing on Bank of America's own legitimate domain.
+    * Wells Fargo's favicon (hash 0x0000ff7f7e540000, same value whether
+      resolved live or via plain /favicon.ico) landed at distance 8 from
+      USPS's stored hash and was likewise flagged phishing on its own
+      domain.
+
+    Both real collisions happen to measure exactly 8 bits -- the same value
+    the original tolerance used, guaranteeing these false positives. Fixed
+    by lowering the default to 3 (configs/detection_config.yaml), which has
+    a 5-bit safety margin below every pairwise distance found across the 23
+    populated real brand favicons as of 16 Jul 2026 (see
+    docs/PHASE_1_VALIDATION_REPORT.md for the full pairwise analysis). If
+    the brand reference is ever regenerated, re-run that analysis before
+    trusting this margin still holds.
+    """
+
+    def _real_hash_index(self) -> BrandIndex:
+        return BrandIndex(
+            brands=(
+                Brand(name="Apple", domains=("apple.com",), logo_phash=("ffffe3c3c3e3ffff",)),
+                Brand(
+                    name="Bank of America",
+                    domains=("bankofamerica.com",),
+                    logo_phash=("ffff830081e3ffff",),
+                ),
+                Brand(name="USPS", domains=("usps.com",), logo_phash=("80e0ff7f7e70c000",)),
+                Brand(
+                    name="Wells Fargo", domains=("wellsfargo.com",), logo_phash=("0000ff7f7e540000",)
+                ),
+            )
+        )
+
+    def test_default_tolerance_does_not_flag_bank_of_americas_own_favicon(self):
+        idx = self._real_hash_index()
+        html = '<html><head><link rel="icon" href="https://bankofamerica.com/favicon.ico"></head></html>'
+        artifacts = PageArtifacts(requested_url="x", html=html, final_url="https://bankofamerica.com")
+        with mock.patch(
+            f"{MODULE}._fetch_favicon_bytes", return_value=b"placeholder-not-a-real-image"
+        ), mock.patch(f"{MODULE}.average_hash", return_value=0xFFFF830081E3FFFF), mock.patch(
+            f"{MODULE}.mmh3_32", return_value=999999  # force a miss on the exact-hash path
+        ):
+            sig = favicon_match.evaluate(artifacts, "https://bankofamerica.com", idx)
+        assert sig.triggered is False
+
+    def test_default_tolerance_does_not_flag_wells_fargos_own_favicon(self):
+        idx = self._real_hash_index()
+        html = '<html><head><link rel="icon" href="https://wellsfargo.com/favicon.ico"></head></html>'
+        artifacts = PageArtifacts(requested_url="x", html=html, final_url="https://wellsfargo.com")
+        with mock.patch(
+            f"{MODULE}._fetch_favicon_bytes", return_value=b"placeholder-not-a-real-image"
+        ), mock.patch(f"{MODULE}.average_hash", return_value=0x0000FF7F7E540000), mock.patch(
+            f"{MODULE}.mmh3_32", return_value=999999
+        ):
+            sig = favicon_match.evaluate(artifacts, "https://wellsfargo.com", idx)
+        assert sig.triggered is False
+
+    def test_distance_8_no_longer_within_default_tolerance(self):
+        """Direct unit check on the boundary itself: distance 8 (the exact
+        real-world collision distance, in both observed cases) must not
+        trigger at the new default."""
+        from src.detection.hashing import hamming_distance
+
+        bofa_live = 0xFFFF830081E3FFFF
+        apple_stored = 0xFFFFE3C3C3E3FFFF
+        wells_fargo = 0x0000FF7F7E540000
+        usps_stored = 0x80E0FF7F7E70C000
+
+        assert hamming_distance(bofa_live, apple_stored) == 8
+        assert hamming_distance(wells_fargo, usps_stored) == 8
+        assert favicon_match._DEFAULT_PHASH_TOLERANCE < 8
+
+
 class TestNeutralCases:
     def test_no_page_artifacts_is_neutral(self):
         idx = _brand_index_for(_png_bytes())
@@ -118,6 +200,65 @@ class TestNeutralCases:
         html = f'<html><head><link rel="icon" href="{_data_uri(b"not a real image")}"></head></html>'
         artifacts = PageArtifacts(requested_url="x", html=html, final_url="https://attacker.com")
         sig = favicon_match.evaluate(artifacts, "https://attacker.com", idx)
+        assert sig.triggered is False
+
+
+class TestSSRF:
+    """A redirect from the favicon URL must be re-validated on every hop --
+    `requests`' default auto-follow-redirects behavior would otherwise
+    validate only the initial URL and then silently follow a 3xx response
+    to any address, including a private/internal one."""
+
+    def _addrinfo(self, ip: str, port: int = 443):
+        return [(2, 1, 6, "", (ip, port))]
+
+    def test_redirect_to_private_ip_is_refused(self):
+        idx = _brand_index_for(_png_bytes())
+        html = '<html><head><link rel="icon" href="https://attacker.com/favicon.ico"></head></html>'
+        artifacts = PageArtifacts(requested_url="x", html=html, final_url="https://attacker.com")
+
+        redirect_resp = mock.Mock(status_code=302, headers={"Location": "http://169.254.169.254/latest/meta-data/"})
+        addr_sequence = [self._addrinfo("93.184.216.34"), self._addrinfo("169.254.169.254")]
+
+        with mock.patch("src.utils.ssrf.socket.getaddrinfo", side_effect=addr_sequence), mock.patch(
+            "requests.get", return_value=redirect_resp
+        ) as m_get:
+            sig = favicon_match.evaluate(artifacts, "https://attacker.com", idx)
+
+        assert sig.triggered is False
+        # The second (internal) hop must never have been fetched.
+        assert m_get.call_count == 1
+
+    def test_redirect_passes_allow_redirects_false(self):
+        """Every request.get call must disable auto-redirect-following so
+        the manual per-hop SSRF check is actually the thing deciding
+        whether a redirect is followed."""
+        idx = _brand_index_for(_png_bytes())
+        html = '<html><head><link rel="icon" href="https://attacker.com/favicon.ico"></head></html>'
+        artifacts = PageArtifacts(requested_url="x", html=html, final_url="https://attacker.com")
+
+        ok_resp = mock.Mock(status_code=200)
+        ok_resp.iter_content = mock.Mock(return_value=iter([]))
+
+        with mock.patch(
+            "src.utils.ssrf.socket.getaddrinfo", return_value=self._addrinfo("93.184.216.34")
+        ), mock.patch("requests.get", return_value=ok_resp) as m_get:
+            favicon_match.evaluate(artifacts, "https://attacker.com", idx)
+
+        assert m_get.call_args.kwargs.get("allow_redirects") is False
+
+    def test_too_many_favicon_redirects_is_neutral(self):
+        idx = _brand_index_for(_png_bytes())
+        html = '<html><head><link rel="icon" href="https://attacker.com/favicon.ico"></head></html>'
+        artifacts = PageArtifacts(requested_url="x", html=html, final_url="https://attacker.com")
+
+        redirect_resp = mock.Mock(status_code=302, headers={"Location": "https://attacker.com/favicon.ico"})
+
+        with mock.patch(
+            "src.utils.ssrf.socket.getaddrinfo", return_value=self._addrinfo("93.184.216.34")
+        ), mock.patch("requests.get", return_value=redirect_resp):
+            sig = favicon_match.evaluate(artifacts, "https://attacker.com", idx)
+
         assert sig.triggered is False
 
 

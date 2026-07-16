@@ -1,34 +1,412 @@
 {
   "version": "0.1.0",
-  "generated_at": null,
+  "generated_at": "2026-07-16T09:40:54.943737+00:00",
   "note": "Seed brand/domain/alias list (DEC-C). favicon_mmh3 and logo_phash are shipped empty -- this environment has no network access to fetch real favicons from these live sites. Run `python scripts/build_brand_reference.py` with network access to populate them; A1 (brand-mismatch) and A3 (typosquat) work immediately on the seed data alone, since they only need domains/aliases, not hashes. Tranco is an optional additional seed source for more domains -- never used as ML training/validation data.",
   "brands": [
-    {"name": "PayPal", "domains": ["paypal.com"], "aliases": ["paypal", "pay pal"], "favicon_mmh3": [], "logo_phash": []},
-    {"name": "Google", "domains": ["google.com"], "aliases": ["google"], "favicon_mmh3": [], "logo_phash": []},
-    {"name": "Microsoft", "domains": ["microsoft.com"], "aliases": ["microsoft", "msft"], "favicon_mmh3": [], "logo_phash": []},
-    {"name": "Apple", "domains": ["apple.com"], "aliases": ["apple", "icloud"], "favicon_mmh3": [], "logo_phash": []},
-    {"name": "Amazon", "domains": ["amazon.com"], "aliases": ["amazon"], "favicon_mmh3": [], "logo_phash": []},
-    {"name": "Facebook", "domains": ["facebook.com"], "aliases": ["facebook", "fb"], "favicon_mmh3": [], "logo_phash": []},
-    {"name": "Instagram", "domains": ["instagram.com"], "aliases": ["instagram", "insta"], "favicon_mmh3": [], "logo_phash": []},
-    {"name": "Netflix", "domains": ["netflix.com"], "aliases": ["netflix"], "favicon_mmh3": [], "logo_phash": []},
-    {"name": "Chase", "domains": ["chase.com"], "aliases": ["chase", "chase bank"], "favicon_mmh3": [], "logo_phash": []},
-    {"name": "Bank of America", "domains": ["bankofamerica.com"], "aliases": ["bank of america", "bofa"], "favicon_mmh3": [], "logo_phash": []},
-    {"name": "Wells Fargo", "domains": ["wellsfargo.com"], "aliases": ["wells fargo"], "favicon_mmh3": [], "logo_phash": []},
-    {"name": "Dropbox", "domains": ["dropbox.com"], "aliases": ["dropbox"], "favicon_mmh3": [], "logo_phash": []},
-    {"name": "DocuSign", "domains": ["docusign.com"], "aliases": ["docusign"], "favicon_mmh3": [], "logo_phash": []},
-    {"name": "Adobe", "domains": ["adobe.com"], "aliases": ["adobe"], "favicon_mmh3": [], "logo_phash": []},
-    {"name": "LinkedIn", "domains": ["linkedin.com"], "aliases": ["linkedin"], "favicon_mmh3": [], "logo_phash": []},
-    {"name": "X", "domains": ["x.com", "twitter.com"], "aliases": ["twitter"], "favicon_mmh3": [], "logo_phash": []},
-    {"name": "Coinbase", "domains": ["coinbase.com"], "aliases": ["coinbase"], "favicon_mmh3": [], "logo_phash": []},
-    {"name": "Binance", "domains": ["binance.com"], "aliases": ["binance"], "favicon_mmh3": [], "logo_phash": []},
-    {"name": "American Express", "domains": ["americanexpress.com"], "aliases": ["american express", "amex"], "favicon_mmh3": [], "logo_phash": []},
-    {"name": "eBay", "domains": ["ebay.com"], "aliases": ["ebay"], "favicon_mmh3": [], "logo_phash": []},
-    {"name": "Outlook", "domains": ["outlook.com", "live.com"], "aliases": ["outlook"], "favicon_mmh3": [], "logo_phash": []},
-    {"name": "Yahoo", "domains": ["yahoo.com"], "aliases": ["yahoo"], "favicon_mmh3": [], "logo_phash": []},
-    {"name": "USPS", "domains": ["usps.com"], "aliases": ["usps", "us postal service"], "favicon_mmh3": [], "logo_phash": []},
-    {"name": "DHL", "domains": ["dhl.com"], "aliases": ["dhl"], "favicon_mmh3": [], "logo_phash": []},
-    {"name": "FedEx", "domains": ["fedex.com"], "aliases": ["fedex"], "favicon_mmh3": [], "logo_phash": []},
-    {"name": "Steam", "domains": ["steampowered.com", "steamcommunity.com"], "aliases": ["steam"], "favicon_mmh3": [], "logo_phash": []},
-    {"name": "IRS", "domains": ["irs.gov"], "aliases": ["irs", "internal revenue service"], "favicon_mmh3": [], "logo_phash": []}
+    {
+      "name": "PayPal",
+      "domains": [
+        "paypal.com"
+      ],
+      "aliases": [
+        "paypal",
+        "pay pal"
+      ],
+      "favicon_mmh3": [
+        -1296273849
+      ],
+      "logo_phash": [
+        "ffc3c1c1c387cfff"
+      ]
+    },
+    {
+      "name": "Google",
+      "domains": [
+        "google.com"
+      ],
+      "aliases": [
+        "google"
+      ],
+      "favicon_mmh3": [
+        400996543
+      ],
+      "logo_phash": [
+        "3c42dffff9db423c"
+      ]
+    },
+    {
+      "name": "Microsoft",
+      "domains": [
+        "microsoft.com"
+      ],
+      "aliases": [
+        "microsoft",
+        "msft"
+      ],
+      "favicon_mmh3": [
+        -933840094
+      ],
+      "logo_phash": [
+        "07072700072f0f0f"
+      ]
+    },
+    {
+      "name": "Apple",
+      "domains": [
+        "apple.com"
+      ],
+      "aliases": [
+        "apple",
+        "icloud"
+      ],
+      "favicon_mmh3": [
+        1057987002
+      ],
+      "logo_phash": [
+        "ffffe3c3c3e3ffff"
+      ]
+    },
+    {
+      "name": "Amazon",
+      "domains": [
+        "amazon.com"
+      ],
+      "aliases": [
+        "amazon"
+      ],
+      "favicon_mmh3": [
+        -1400292914
+      ],
+      "logo_phash": [
+        "000000e77f180000"
+      ]
+    },
+    {
+      "name": "Facebook",
+      "domains": [
+        "facebook.com"
+      ],
+      "aliases": [
+        "facebook",
+        "fb"
+      ],
+      "favicon_mmh3": [
+        1273202102
+      ],
+      "logo_phash": [
+        "000c1c183c381818"
+      ]
+    },
+    {
+      "name": "Instagram",
+      "domains": [
+        "instagram.com"
+      ],
+      "aliases": [
+        "instagram",
+        "insta"
+      ],
+      "favicon_mmh3": [
+        -800939220
+      ],
+      "logo_phash": [
+        "007e5e7e7e5afe7c"
+      ]
+    },
+    {
+      "name": "Netflix",
+      "domains": [
+        "netflix.com"
+      ],
+      "aliases": [
+        "netflix"
+      ],
+      "favicon_mmh3": [
+        -278419102
+      ],
+      "logo_phash": [
+        "34343c3c3c3c2c2c"
+      ]
+    },
+    {
+      "name": "Chase",
+      "domains": [
+        "chase.com"
+      ],
+      "aliases": [
+        "chase",
+        "chase bank"
+      ],
+      "favicon_mmh3": [
+        -49018705
+      ],
+      "logo_phash": [
+        "1c5ec0c3c3037a38"
+      ]
+    },
+    {
+      "name": "Bank of America",
+      "domains": [
+        "bankofamerica.com"
+      ],
+      "aliases": [
+        "bank of america",
+        "bofa"
+      ],
+      "favicon_mmh3": [
+        -107175375
+      ],
+      "logo_phash": [
+        "ffff810081c3f7ff"
+      ]
+    },
+    {
+      "name": "Wells Fargo",
+      "domains": [
+        "wellsfargo.com"
+      ],
+      "aliases": [
+        "wells fargo"
+      ],
+      "favicon_mmh3": [
+        -636867327
+      ],
+      "logo_phash": [
+        "0000ff7f7e540000"
+      ]
+    },
+    {
+      "name": "Dropbox",
+      "domains": [
+        "dropbox.com"
+      ],
+      "aliases": [
+        "dropbox"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "DocuSign",
+      "domains": [
+        "docusign.com"
+      ],
+      "aliases": [
+        "docusign"
+      ],
+      "favicon_mmh3": [
+        -1354228733
+      ],
+      "logo_phash": [
+        "001c1e26263c2800"
+      ]
+    },
+    {
+      "name": "Adobe",
+      "domains": [
+        "adobe.com"
+      ],
+      "aliases": [
+        "adobe"
+      ],
+      "favicon_mmh3": [
+        867789519
+      ],
+      "logo_phash": [
+        "18183c3c6666fff2"
+      ]
+    },
+    {
+      "name": "LinkedIn",
+      "domains": [
+        "linkedin.com"
+      ],
+      "aliases": [
+        "linkedin"
+      ],
+      "favicon_mmh3": [
+        672680711
+      ],
+      "logo_phash": [
+        "bf01613d767600ad"
+      ]
+    },
+    {
+      "name": "X",
+      "domains": [
+        "x.com",
+        "twitter.com"
+      ],
+      "aliases": [
+        "twitter"
+      ],
+      "favicon_mmh3": [
+        -1607619103
+      ],
+      "logo_phash": [
+        "00763c381c3c6e00"
+      ]
+    },
+    {
+      "name": "Coinbase",
+      "domains": [
+        "coinbase.com"
+      ],
+      "aliases": [
+        "coinbase"
+      ],
+      "favicon_mmh3": [
+        897873320
+      ],
+      "logo_phash": [
+        "3c4299bfbf99423c"
+      ]
+    },
+    {
+      "name": "Binance",
+      "domains": [
+        "binance.com"
+      ],
+      "aliases": [
+        "binance"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "American Express",
+      "domains": [
+        "americanexpress.com"
+      ],
+      "aliases": [
+        "american express",
+        "amex"
+      ],
+      "favicon_mmh3": [
+        449100736
+      ],
+      "logo_phash": [
+        "001f3e3f3f1f1f00"
+      ]
+    },
+    {
+      "name": "eBay",
+      "domains": [
+        "ebay.com"
+      ],
+      "aliases": [
+        "ebay"
+      ],
+      "favicon_mmh3": [
+        -1304257209
+      ],
+      "logo_phash": [
+        "000000ffffff0f00"
+      ]
+    },
+    {
+      "name": "Outlook",
+      "domains": [
+        "outlook.com",
+        "live.com"
+      ],
+      "aliases": [
+        "outlook"
+      ],
+      "favicon_mmh3": [
+        1832989233,
+        1972282798
+      ],
+      "logo_phash": [
+        "001e6ff6f3673f00"
+      ]
+    },
+    {
+      "name": "Yahoo",
+      "domains": [
+        "yahoo.com"
+      ],
+      "aliases": [
+        "yahoo"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "USPS",
+      "domains": [
+        "usps.com"
+      ],
+      "aliases": [
+        "usps",
+        "us postal service"
+      ],
+      "favicon_mmh3": [
+        -322136478
+      ],
+      "logo_phash": [
+        "80e0ff7f7e70c000"
+      ]
+    },
+    {
+      "name": "DHL",
+      "domains": [
+        "dhl.com"
+      ],
+      "aliases": [
+        "dhl"
+      ],
+      "favicon_mmh3": [
+        -999577907
+      ],
+      "logo_phash": [
+        "ffffff8180ffffff"
+      ]
+    },
+    {
+      "name": "FedEx",
+      "domains": [
+        "fedex.com"
+      ],
+      "aliases": [
+        "fedex"
+      ],
+      "favicon_mmh3": [
+        -2081990408
+      ],
+      "logo_phash": []
+    },
+    {
+      "name": "Steam",
+      "domains": [
+        "steampowered.com",
+        "steamcommunity.com"
+      ],
+      "aliases": [
+        "steam"
+      ],
+      "favicon_mmh3": [
+        -375514573
+      ],
+      "logo_phash": [
+        "00040e1efcf83418"
+      ]
+    },
+    {
+      "name": "IRS",
+      "domains": [
+        "irs.gov"
+      ],
+      "aliases": [
+        "irs",
+        "internal revenue service"
+      ],
+      "favicon_mmh3": [
+        -483317989
+      ],
+      "logo_phash": [
+        "ef183038380401ff"
+      ]
+    }
   ]
 }
