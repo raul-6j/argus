@@ -8,6 +8,12 @@ const whyBtn = document.getElementById("whyBtn");
 const shapPanel = document.getElementById("shapPanel");
 const errorMessageEl = document.getElementById("errorMessage");
 const openOptionsBtn = document.getElementById("openOptions");
+const deepScanBtn = document.getElementById("deepScanBtn");
+const deepScanConsent = document.getElementById("deepScanConsent");
+const deepScanFullUrlCheckbox = document.getElementById("deepScanFullUrl");
+const deepScanPanel = document.getElementById("deepScanPanel");
+const signalsPanel = document.getElementById("signalsPanel");
+const plainExplanationEl = document.getElementById("plainExplanation");
 
 function showState(name) {
   loadingEl.classList.toggle("hidden", name !== "loading");
@@ -21,6 +27,57 @@ function renderResult(result) {
   verdictEl.className = `verdict ${result.label}`;
   confidenceEl.textContent = `Confidence: ${(result.confidence * 100).toFixed(1)}%`;
   showState("result");
+}
+
+/**
+ * Render a deep-scan result's detection signals (Phase 1, DEC-A) as
+ * labeled badges, plus its plain-language explanation. Updates the verdict/
+ * confidence in place if the fusion layer's decision differs from the
+ * quick check's model-only decision.
+ * @param {{label: string, confidence: number, risk_score?: number, signals?: Array<{name: string, triggered: boolean, direction: string, evidence: object}>}} result
+ */
+function renderDeepScanResult(result) {
+  verdictEl.textContent = result.label === "phishing" ? "⚠ Phishing" : "✓ Legitimate";
+  verdictEl.className = `verdict ${result.label}`;
+  confidenceEl.textContent = `Confidence: ${(result.confidence * 100).toFixed(1)}%`;
+
+  signalsPanel.innerHTML = "";
+  const triggered = (result.signals || []).filter((s) => s.triggered);
+  for (const signal of triggered) {
+    const badge = document.createElement("span");
+    badge.className = `signal-badge ${signal.direction}`;
+    badge.textContent = signalLabel(signal);
+    badge.title = JSON.stringify(signal.evidence);
+    signalsPanel.appendChild(badge);
+  }
+  if (triggered.length === 0) {
+    const badge = document.createElement("span");
+    badge.className = "signal-badge neutral";
+    badge.textContent = "No brand-intelligence signals triggered";
+    signalsPanel.appendChild(badge);
+  }
+
+  plainExplanationEl.textContent = result.plain_explanation || "";
+  deepScanPanel.classList.remove("hidden");
+}
+
+/**
+ * Build a short human label for a signal badge from its name + evidence.
+ * @param {{name: string, evidence: object}} signal
+ * @returns {string}
+ */
+function signalLabel(signal) {
+  const brand = signal.evidence?.impersonated_brand || signal.evidence?.page_brand;
+  switch (signal.name) {
+    case "typosquat":
+      return brand ? `Look-alike of ${brand}` : "Look-alike domain";
+    case "favicon_match":
+      return brand ? `Icon matches ${brand}` : "Icon matches a known brand";
+    case "brand_mismatch":
+      return brand ? `Claims to be ${brand}` : "Brand/domain mismatch";
+    default:
+      return signal.name;
+  }
 }
 
 function renderError(message) {
@@ -97,6 +154,33 @@ async function init() {
       } finally {
         whyBtn.disabled = false;
         whyBtn.textContent = "Why?";
+      }
+    });
+
+    // Deep Scan (Phase 1, DEC-A/DEC-D): explicit, user-initiated -- shows a
+    // one-time consent toggle for sending the full URL (default off, the
+    // passive check above always stays hostname-only) before running.
+    deepScanBtn.addEventListener("click", async () => {
+      if (deepScanConsent.classList.contains("hidden")) {
+        deepScanConsent.classList.remove("hidden");
+        return;
+      }
+      deepScanBtn.disabled = true;
+      deepScanBtn.textContent = "Scanning...";
+      try {
+        const deepResult = await sendMessage({
+          type: "DEEP_DETECT",
+          url,
+          sendFullUrl: deepScanFullUrlCheckbox.checked,
+        });
+        renderDeepScanResult(deepResult);
+      } catch (err) {
+        deepScanPanel.classList.remove("hidden");
+        signalsPanel.textContent = "";
+        plainExplanationEl.textContent = err.message;
+      } finally {
+        deepScanBtn.disabled = false;
+        deepScanBtn.textContent = "Deep Scan";
       }
     });
   } catch (err) {

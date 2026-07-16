@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { buildPayloadUrl, detect, explain, getSettings } from "../lib/apiClient.js";
+import { buildPayloadUrl, deepScan, detect, explain, getSettings } from "../lib/apiClient.js";
 
 function mockChromeStorage(settings) {
   globalThis.chrome = {
@@ -110,5 +110,90 @@ describe("explain", () => {
 
     const result = await explain("https://example.com/x");
     expect(result.top5_features).toHaveLength(1);
+  });
+});
+
+describe("deepScan", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("posts to /detect with enrich:true and hostname-only by default", async () => {
+    mockChromeStorage({ apiBaseUrl: "http://localhost:5000", sendFullUrl: false });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        url: "https://example.com",
+        label: "phishing",
+        confidence: 0.9,
+        verdict: "phishing",
+        source: "fusion",
+        risk_score: 0.9,
+        signals: [{ name: "typosquat", triggered: true, direction: "phishing", evidence: {} }],
+        latency_ms: 800.2,
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await deepScan("https://example.com/some/path?x=1");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:5000/detect",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ url: "https://example.com", enrich: true }),
+      })
+    );
+    expect(result.signals).toHaveLength(1);
+  });
+
+  it("sends the full URL when the stored setting is opted in", async () => {
+    mockChromeStorage({ apiBaseUrl: "http://localhost:5000", sendFullUrl: true });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await deepScan("https://example.com/path");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:5000/detect",
+      expect.objectContaining({
+        body: JSON.stringify({ url: "https://example.com/path", enrich: true }),
+      })
+    );
+  });
+
+  it("a per-call sendFullUrl override takes precedence over the stored (off) setting", async () => {
+    mockChromeStorage({ apiBaseUrl: "http://localhost:5000", sendFullUrl: false });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await deepScan("https://example.com/path", { sendFullUrl: true });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:5000/detect",
+      expect.objectContaining({
+        body: JSON.stringify({ url: "https://example.com/path", enrich: true }),
+      })
+    );
+  });
+
+  it("a per-call sendFullUrl override can also force hostname-only", async () => {
+    mockChromeStorage({ apiBaseUrl: "http://localhost:5000", sendFullUrl: true });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await deepScan("https://example.com/path", { sendFullUrl: false });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:5000/detect",
+      expect.objectContaining({
+        body: JSON.stringify({ url: "https://example.com", enrich: true }),
+      })
+    );
+  });
+
+  it("throws a clear error when the API base URL is not configured", async () => {
+    mockChromeStorage({ apiBaseUrl: "", sendFullUrl: false });
+    await expect(deepScan("https://example.com")).rejects.toThrow("not configured");
   });
 });

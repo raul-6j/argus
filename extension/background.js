@@ -11,7 +11,7 @@
  * request to the ARGUS API on every single site the user visits.
  */
 
-import { detect, explain } from "./lib/apiClient.js";
+import { deepScan, detect, explain } from "./lib/apiClient.js";
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === "DETECT") {
@@ -23,6 +23,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (message?.type === "EXPLAIN") {
     explain(message.url)
+      .then((result) => sendResponse({ ok: true, result }))
+      .catch((err) => sendResponse({ ok: false, error: err.message }));
+    return true;
+  }
+
+  if (message?.type === "DEEP_DETECT") {
+    // Phase 1 (P1.0/DEC-A/DEC-D): an explicit, user-initiated deep scan --
+    // runs the server-side detection fusion layer. sendFullUrl is a
+    // per-call opt-in (message.sendFullUrl), never the passive default.
+    deepScan(message.url, { sendFullUrl: message.sendFullUrl })
       .then((result) => sendResponse({ ok: true, result }))
       .catch((err) => sendResponse({ ok: false, error: err.message }));
     return true;

@@ -111,3 +111,62 @@ button {
   font-size: 0.85rem;
   color: #c62828;
 }
+
+.button-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.deep-scan-consent {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  color: #444;
+  margin: 0.4rem 0;
+}
+
+.deep-scan-panel {
+  margin-top: 0.5rem;
+  border-top: 1px solid #eee;
+  padding-top: 0.5rem;
+}
+
+.signals-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+}
+
+.signal-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  background: #f0f0f0;
+  color: #333;
+}
+
+.signal-badge.phishing {
+  background: #fdecea;
+  color: #c62828;
+}
+
+.signal-badge.legitimate {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.signal-badge.neutral {
+  background: #f0f0f0;
+  color: #666;
+}
+
+.plain-explanation {
+  font-size: 0.8rem;
+  color: #333;
+  line-height: 1.3;
+  margin: 0;
+}
