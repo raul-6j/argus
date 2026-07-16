@@ -14,9 +14,20 @@ MODULE = "src.detection"
 _CONFIG = {
     "enabled": True,
     "fusion_threshold": 0.30,
-    "signal_weights": {"model": 1.0, "typosquat": 0.6, "favicon_match": 0.9, "brand_mismatch": 0.8},
+    "signal_weights": {
+        "model": 1.0,
+        "typosquat": 0.6,
+        "favicon_match": 0.9,
+        "brand_mismatch": 0.8,
+        "cert_intel": 0.4,
+        "redirect_chain": 0.7,
+    },
     "hard_override_signals": ["favicon_match"],
-    "signal_params": {"typosquat": {"max_edit_distance": 2}, "favicon_match": {"phash_tolerance": 8}},
+    "signal_params": {
+        "typosquat": {"max_edit_distance": 2},
+        "favicon_match": {"phash_tolerance": 3},
+        "redirect_chain": {"max_edit_distance": 2},
+    },
 }
 
 _BRAND_INDEX = BrandIndex(brands=(Brand(name="PayPal", domains=("paypal.com",), aliases=("paypal",)),))
@@ -81,7 +92,9 @@ class TestFailedPageFetch:
 
 
 class TestSuccessfulPageFetch:
-    def test_all_three_signals_run(self):
+    def test_all_five_signals_run(self):
+        """Phase 1's three page-dependent signals plus Phase 2's A4/A5 --
+        all five gated on a successful page fetch, all run together."""
         html = "<html><head><title>Just a page</title></head><body>hello</body></html>"
         artifacts = PageArtifacts(requested_url="x", html=html, final_url="https://example.com")
         v = run_detection(
@@ -93,7 +106,9 @@ class TestSuccessfulPageFetch:
             config=_CONFIG,
         )
         names = {s.name for s in v.signals}
-        assert names == {"typosquat", "favicon_match", "brand_mismatch"}
+        assert names == {
+            "typosquat", "favicon_match", "brand_mismatch", "cert_intel", "redirect_chain",
+        }
 
 
 class TestSignalIsolation:

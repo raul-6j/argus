@@ -75,6 +75,10 @@ function signalLabel(signal) {
       return brand ? `Icon matches ${brand}` : "Icon matches a known brand";
     case "brand_mismatch":
       return brand ? `Claims to be ${brand}` : "Brand/domain mismatch";
+    case "cert_intel":
+      return "Suspicious certificate";
+    case "redirect_chain":
+      return brand ? `Redirects to a ${brand} look-alike` : "Suspicious redirect";
     default:
       return signal.name;
   }

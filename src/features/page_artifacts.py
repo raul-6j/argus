@@ -88,6 +88,43 @@ def _read_capped_body(response: Any) -> Optional[str]:
     return b"".join(chunks).decode(encoding, errors="replace")
 
 
+def _extract_tls_cert(response: Any) -> Optional[dict[str, Any]]:
+    """Pull the peer TLS certificate off an already-open ``requests``
+    connection (Phase 2, A4) — no second connection/handshake needed.
+
+    ``requests`` doesn't expose the peer certificate through its public
+    API, but the underlying ``urllib3`` connection's raw ``ssl.SSLSocket``
+    is reachable via ``response.raw.connection.sock`` while the connection
+    is still open (i.e. before the caller closes ``response``). This is a
+    best-effort extraction — a non-HTTPS response, an already-closed
+    connection, or a urllib3 internal-attribute change all degrade to
+    ``None`` rather than raising (Iron Law #3).
+
+    Args:
+        response: An open ``requests`` streaming response.
+
+    Returns:
+        ``{"subject": ..., "issuer": ..., "not_before": ..., "not_after":
+        ..., "san": [...]}`` (raw ``ssl.getpeercert()`` shape, lightly
+        flattened), or ``None`` if unavailable.
+    """
+    try:
+        sock = response.raw.connection.sock
+        cert = sock.getpeercert()
+        if not cert:
+            return None
+        return {
+            "subject": cert.get("subject"),
+            "issuer": cert.get("issuer"),
+            "not_before": cert.get("notBefore"),
+            "not_after": cert.get("notAfter"),
+            "san": [v for k, v in cert.get("subjectAltName", ()) if k == "DNS"],
+        }
+    except Exception as exc:  # noqa: BLE001 - best-effort only
+        logger.debug("TLS cert extraction unavailable: %s", exc)
+        return None
+
+
 def _fetch_once(url: str) -> Any:
     """Issue a single non-redirecting streamed GET. Returns the response."""
     import requests
@@ -140,6 +177,7 @@ def fetch(url: str) -> PageArtifacts:
                 response.raise_for_status()
                 artifacts.final_url = current
                 artifacts.response_headers = dict(response.headers)
+                artifacts.tls_cert = _extract_tls_cert(response)
                 artifacts.html = _read_capped_body(response)
                 if artifacts.html is None:
                     artifacts.fetch_error = "response body exceeded size cap"

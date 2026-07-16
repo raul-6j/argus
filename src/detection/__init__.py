@@ -22,7 +22,7 @@ from typing import Any, Optional
 
 from src.detection import fusion
 from src.detection.brand_reference import BrandIndex
-from src.detection.signals import brand_mismatch, favicon_match, typosquat
+from src.detection.signals import brand_mismatch, cert_intel, favicon_match, redirect_chain, typosquat
 from src.detection.types import FusedVerdict, RiskSignal
 from src.features.page_artifacts import PageArtifacts
 
@@ -112,7 +112,14 @@ def run_detection(
                 page_artifacts,
                 url,
                 brand_index,
-                phash_tolerance=favicon_params.get("phash_tolerance", 8),
+                # Single source of truth: fall back to the signal module's
+                # own default rather than duplicating the magic number here
+                # -- a stale hardcoded copy of this value is exactly what
+                # caused the real-brand false positives found and fixed
+                # during Phase 1 validation (DEC-026).
+                phash_tolerance=favicon_params.get(
+                    "phash_tolerance", favicon_match._DEFAULT_PHASH_TOLERANCE
+                ),
             ),
         )
         signals.append(favicon_signal)
@@ -122,6 +129,31 @@ def run_detection(
                 "brand_mismatch",
                 lambda: brand_mismatch.evaluate(
                     page_artifacts, url, brand_index, favicon_signal, html_features
+                ),
+            )
+        )
+
+    # A4 (Phase 2) — reuses the TLS cert already captured by the shared
+    # fetch; no extra connection. A5 (Phase 2) — reuses the redirect chain
+    # already captured by the same fetch; no extra fetch either. Both are
+    # page-dependent, so both require a successful fetch, same as
+    # favicon_match/brand_mismatch above.
+    if page_artifacts is not None and page_artifacts.ok:
+        signals.append(
+            _run_signal_safely(
+                "cert_intel",
+                lambda: cert_intel.evaluate(page_artifacts, url, brand_index),
+            )
+        )
+        redirect_params = signal_params.get("redirect_chain", {})
+        signals.append(
+            _run_signal_safely(
+                "redirect_chain",
+                lambda: redirect_chain.evaluate(
+                    page_artifacts,
+                    url,
+                    brand_index,
+                    max_edit_distance=redirect_params.get("max_edit_distance", 2),
                 ),
             )
         )

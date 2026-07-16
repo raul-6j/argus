@@ -1,15 +1,15 @@
-# ARGUS — Detection fusion-layer configuration (Phase 1, DEC-A)
+# ARGUS — Detection fusion-layer configuration (Phase 1, DEC-A; extended Phase 2)
 # Loaded once by src/api/app.py::create_app() at process startup, alongside
 # api_config.yaml, model_config.yaml, and threat_intel_config.yaml.
 #
 # Scope (DEC-A): this layer combines the trained ML model's phishing
 # probability with deterministic, explainable brand-intelligence signals
-# (typosquat/homograph, favicon/logo match, brand-vs-domain mismatch). It
-# does NOT retrain or modify the 18-feature ML model. If this file is
-# absent, or `enabled: false`, /detect and /explain behave exactly as they
-# did before Phase 1 (model-only), unchanged — backward compatible by
-# design, matching threat_intel_config.yaml's graceful-degradation
-# convention.
+# (typosquat/homograph, favicon/logo match, brand-vs-domain mismatch,
+# TLS certificate intelligence, redirect-chain unwrapping). It does NOT
+# retrain or modify the 18-feature ML model. If this file is absent, or
+# `enabled: false`, /detect and /explain behave exactly as they did before
+# Phase 1 (model-only), unchanged — backward compatible by design, matching
+# threat_intel_config.yaml's graceful-degradation convention.
 #
 # Signals only run when a request is enriched (POST /detect {"enrich":
 # true}, or /explain, which always enriches) — the default hostname-only
@@ -36,6 +36,15 @@ signal_weights:
   typosquat: 0.6
   favicon_match: 0.9
   brand_mismatch: 0.8
+  # Phase 2 additions:
+  cert_intel: 0.4     # cert age/issuer is corroborating evidence, deliberately
+                       # lighter than the brand-identity signals above -- "has
+                       # a fresh free-CA cert" alone is common among legit
+                       # sites too (see src/detection/signals/cert_intel.py).
+  redirect_chain: 0.7  # this signal only ever triggers when a fresh A3
+                        # typosquat check on the FINAL landing URL already
+                        # fired, so it's nearly as high-confidence as
+                        # typosquat itself.
 
 # Signal names allowed to force label=phishing on their own (a "hard
 # override" trigger, independent of the model/other signals) -- reserved
@@ -53,4 +62,16 @@ signal_params:
   typosquat:
     max_edit_distance: 2
   favicon_match:
-    phash_tolerance: 8   # Hamming distance out of 64 bits (~12.5%) for a soft logo match
+    # Hamming distance out of 64 bits for a SOFT logo match (the exact-hash
+    # hard-override path is separate and unaffected by this value). Set
+    # empirically, not guessed: measured pairwise Hamming distance across
+    # all 23 real, populated brand favicons in data/reference/brands.json
+    # (16 Jul 2026) found the CLOSEST unrelated-brand pair (Wells Fargo vs.
+    # USPS) at distance 8 -- the previous default of 8 therefore guaranteed
+    # false positives on real brand sites (confirmed live: Bank of America's
+    # own favicon soft-matched "Apple" at distance 8, Wells Fargo's matched
+    # "USPS" at distance 8, both flagged phishing on their own real domain).
+    # 3 sits with a 5-bit safety margin below that observed minimum -- if
+    # the brand reference grows, re-run the pairwise-distance check before
+    # assuming this value is still safe.
+    phash_tolerance: 3
