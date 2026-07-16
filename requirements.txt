@@ -16,6 +16,11 @@ requests==2.32.3
 python-whois==0.9.5
 dnspython==2.6.1
 
+# --- Detection fusion layer (Phase 1) ---
+Pillow==11.3.0          # favicon/logo average-hash (src/detection/hashing.py);
+                         # was already an installed transitive dep of matplotlib/shap,
+                         # now imported directly so it's pinned explicitly
+
 # --- API ---
 Flask==3.0.3
 flask-cors==6.0.5

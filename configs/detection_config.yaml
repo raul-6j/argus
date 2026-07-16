@@ -1,0 +1,56 @@
+# ARGUS — Detection fusion-layer configuration (Phase 1, DEC-A)
+# Loaded once by src/api/app.py::create_app() at process startup, alongside
+# api_config.yaml, model_config.yaml, and threat_intel_config.yaml.
+#
+# Scope (DEC-A): this layer combines the trained ML model's phishing
+# probability with deterministic, explainable brand-intelligence signals
+# (typosquat/homograph, favicon/logo match, brand-vs-domain mismatch). It
+# does NOT retrain or modify the 18-feature ML model. If this file is
+# absent, or `enabled: false`, /detect and /explain behave exactly as they
+# did before Phase 1 (model-only), unchanged — backward compatible by
+# design, matching threat_intel_config.yaml's graceful-degradation
+# convention.
+#
+# Signals only run when a request is enriched (POST /detect {"enrich":
+# true}, or /explain, which always enriches) — the default hostname-only
+# fast path is completely untouched by this file.
+
+enabled: true
+
+# Path to the brand reference asset (DEC-C), relative to the project root.
+brand_reference_path: data/reference/brands.json
+
+# Fusion threshold. Kept equal to model_config.yaml's calibrated threshold
+# (0.30, DEC-017) so that "no signal triggers" reproduces the model-only
+# decision exactly — if the model threshold is ever recalibrated, update
+# this value too.
+fusion_threshold: 0.30
+
+# Relative weights in the fusion weighted-sum (src/detection/fusion.py).
+# `model` is the ML model's own contribution; a signal's weight only
+# applies when that signal actually triggers. Values are relative, not
+# required to sum to 1.0 -- fuse() normalizes by the total weight that
+# actually contributed to a given verdict.
+signal_weights:
+  model: 1.0
+  typosquat: 0.6
+  favicon_match: 0.9
+  brand_mismatch: 0.8
+
+# Signal names allowed to force label=phishing on their own (a "hard
+# override" trigger, independent of the model/other signals) -- reserved
+# for near-zero-false-positive triggers only. Note: favicon_match itself
+# only *marks* a specific trigger as hard-override internally (an exact
+# favicon-hash match, never the weaker perceptual-hash soft match) -- see
+# src/detection/signals/favicon_match.py. Listing a signal here is a second,
+# independent gate: both the signal's own is_hard_override flag AND this
+# list must agree before fusion treats it as decisive.
+hard_override_signals:
+  - favicon_match
+
+# Per-signal tunables, read by src/detection/__init__.py::run_detection.
+signal_params:
+  typosquat:
+    max_edit_distance: 2
+  favicon_match:
+    phash_tolerance: 8   # Hamming distance out of 64 bits (~12.5%) for a soft logo match
