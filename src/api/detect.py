@@ -18,6 +18,7 @@ from flask import Blueprint, current_app, jsonify, request
 from marshmallow import ValidationError
 
 from src.api.schemas import DetectRequestSchema, ExplainRequestSchema
+from src.api.threat_intel.prefilter import check_prefilter
 from src.features.pipeline import extract_features
 from src.models.explain import explain_single
 from src.models.feature_adapter import adapt_to_training_contract
@@ -76,6 +77,13 @@ def detect():
 
     Request:  ``{"url": "https://example.com", "enrich": false}``
     Response: ``{"url", "label", "confidence", "verdict", "source", "latency_ms"}``
+
+    Before running the ML model, checks the threat-intel pre-filter
+    (DEC-010 — currently a local PhishTank snapshot). A match short-circuits
+    straight to ``{"label": "phishing", "source": "phishtank"}`` with no
+    feature extraction or model inference — deliberately skips the HTML
+    enrichment fetch too, since a known-bad match needs no further
+    confirmation and there is no reason to fetch a known-malicious page.
     """
     start = time.perf_counter()
     body = request.get_json(silent=True) or {}
@@ -90,6 +98,25 @@ def detect():
         return _error(reason, 400)
 
     argus = current_app.extensions["argus"]
+
+    threat_intel = argus.get("threat_intel", {})
+    if threat_intel.get("enabled"):
+        source = check_prefilter(
+            url,
+            threat_intel["phishtank_index"],
+            threat_intel.get("phishtank_hostname_index", frozenset()),
+        )
+        if source is not None:
+            latency_ms = round((time.perf_counter() - start) * 1000, 3)
+            return jsonify(
+                url=url,
+                label="phishing",
+                confidence=1.0,
+                verdict="phishing",
+                source=source,
+                latency_ms=latency_ms,
+            )
+
     fv = _extract_with_bound(url, data["enrich"])
     model_input = adapt_to_training_contract(fv.features)
     proba = argus["pipeline"].predict_proba([model_input.to_vector()])[0][1]

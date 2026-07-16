@@ -1,12 +1,12 @@
 """Frozen model I/O contract.
 
-The trained model consumes exactly the 22 features listed in
-``configs/data_config.yaml -> feature_columns`` (see DEC-013, DEC-014), on
+The trained model consumes exactly the 18 features listed in
+``configs/data_config.yaml -> feature_columns`` (see DEC-013, DEC-014, DEC-016), on
 UCI's ``-1/0/1`` categorical scale. This is a *different* feature space from
 ``configs/feature_config.yaml -> feature_order`` (Tier 1/2/3/4 live-extractor
 output) — see the feature-space-schism note in project memory. ``FEATURE_ORDER``
 here always reflects the training contract; nothing in this module hardcodes
-the 22 names, so a future change to ``data_config.yaml`` propagates
+the 18 names, so a future change to ``data_config.yaml`` propagates
 automatically (enforced by ``tests/models/test_contract.py``).
 """
 

@@ -1,0 +1,47 @@
+# ARGUS — Threat-intel pre-filter configuration (Phase 9, Task 9.1, DEC-010)
+# Loaded once by src/api/app.py::create_app() at process startup, alongside
+# api_config.yaml and model_config.yaml.
+#
+# Scope note (DEC-010): PhishTank-only for now. The original Phase 9.1
+# design (docs/PHASE_GUIDE.md) also calls for a Google Safe Browsing (GSB)
+# hash-prefix layer and an allowlist (Task 9.2, vault-based) ahead of this
+# check — both deferred. If this file is absent entirely, the pre-filter is
+# disabled and /detect falls straight through to the ML model, unchanged
+# from pre-Phase-9 behavior (backward compatible).
+
+enabled: true
+
+# Loaded once into an in-memory set at startup (see
+# src/api/threat_intel/phishtank.py) — not re-read per request. Update this
+# path when rotating to a newer snapshot; there is no automatic "latest"
+# discovery (Iron Law #2: no implicit path magic).
+phishtank_snapshot_path: data/raw/phishtank_2026-07-02.csv
+
+# Placeholder — not implemented yet (needs a GSB_API_KEY). See DEC-010.
+gsb_enabled: false
+
+# Hosting platforms where each tenant gets a dedicated, attacker-controlled
+# subdomain (not a shared path under one hostname) — e.g. an attacker's Wix
+# site at "some-name.wixstudio.com" is entirely theirs, unlike a shared
+# path-based host such as "sites.google.com/view/X". For these platforms
+# only, the pre-filter also matches on the bare hostname (no path), so a
+# hostname-only request (the browser extension's S1 privacy default) can
+# still match a PhishTank entry recorded with a path. See DEC-010 addendum.
+#
+# Deliberately conservative and opt-in: any hostname NOT ending in one of
+# these apex domains is matched by exact full URL only (the original,
+# shared-hosting-safe DEC-010 behavior). Do NOT add path-based multi-tenant
+# platforms here (Google Sites, URL shorteners, Notion, etc.) — those share
+# one hostname across many unrelated tenants, and hostname-level matching
+# there would be a real false-positive risk.
+subdomain_per_tenant_platforms:
+  - wixstudio.com
+  - weebly.com
+  - github.io
+  - blogspot.com
+  - herokuapp.com
+  - vercel.app
+  - netlify.app
+  - repl.co
+  - glitch.me
+  - 000webhostapp.com

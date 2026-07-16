@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 
 from src.features import pipeline
-from src.features.pipeline import FeatureVector, extract_features
+from src.features.pipeline import extract_features
 
 MODULE = "src.features.pipeline"
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"

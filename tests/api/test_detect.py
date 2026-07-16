@@ -8,6 +8,9 @@ from __future__ import annotations
 
 from unittest import mock
 
+import pytest
+
+from src.data.loaders import normalize_url
 from src.features.pipeline import FeatureVector
 from src.models.contract import FEATURE_ORDER
 
@@ -133,3 +136,72 @@ def test_all_detect_responses_have_latency_ms(client):
     with mock.patch(f"{MODULE}.extract_features", return_value=fv):
         resp = client.post("/detect", json={"url": "https://example.com"})
     assert "latency_ms" in resp.get_json()
+
+
+# --------------------------------------------------------------------------- #
+# threat-intel pre-filter short-circuit (Phase 9, Task 9.1, DEC-010)
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture
+def _restore_threat_intel(app):
+    """Save/restore app.extensions['argus']['threat_intel'].
+
+    `app` is session-scoped and shared by every test in tests/api/ — a test
+    that swaps in a fake pre-filter index must put the real one back
+    afterward, or it would leak into every later test in the session.
+    """
+    original = app.extensions["argus"]["threat_intel"]
+    yield
+    app.extensions["argus"]["threat_intel"] = original
+
+
+def test_prefilter_match_short_circuits_without_calling_model(app, client, _restore_threat_intel):
+    bad_url = "http://phish-prefilter-test.example.com/login"
+    app.extensions["argus"]["threat_intel"] = {
+        "enabled": True,
+        "phishtank_index": frozenset({normalize_url(bad_url)}),
+    }
+
+    with mock.patch(f"{MODULE}.extract_features") as m_extract:
+        resp = client.post("/detect", json={"url": bad_url})
+
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["label"] == "phishing"
+    assert body["verdict"] == "phishing"
+    assert body["confidence"] == 1.0
+    assert body["source"] == "phishtank"
+    assert "latency_ms" in body
+    m_extract.assert_not_called()
+
+
+def test_prefilter_miss_falls_through_to_model(app, client, _restore_threat_intel):
+    app.extensions["argus"]["threat_intel"] = {
+        "enabled": True,
+        "phishtank_index": frozenset({normalize_url("http://some-other-phish.example.com/")}),
+    }
+    fv = _fake_feature_vector("https://example.com", _LEGIT_RAW_FEATURES)
+
+    with mock.patch(f"{MODULE}.extract_features", return_value=fv) as m_extract:
+        resp = client.post("/detect", json={"url": "https://example.com"})
+
+    assert resp.status_code == 200
+    assert resp.get_json()["source"] == "model"
+    m_extract.assert_called_once()
+
+
+def test_prefilter_disabled_falls_through_to_model(app, client, _restore_threat_intel):
+    bad_url = "http://phish-prefilter-test.example.com/login"
+    app.extensions["argus"]["threat_intel"] = {
+        "enabled": False,
+        "phishtank_index": frozenset({normalize_url(bad_url)}),
+    }
+    fv = _fake_feature_vector(bad_url, _LEGIT_RAW_FEATURES)
+
+    with mock.patch(f"{MODULE}.extract_features", return_value=fv) as m_extract:
+        resp = client.post("/detect", json={"url": bad_url})
+
+    assert resp.status_code == 200
+    assert resp.get_json()["source"] == "model"
+    m_extract.assert_called_once()

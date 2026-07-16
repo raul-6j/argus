@@ -88,6 +88,64 @@ def test_otp_lockout_after_max_attempts(client):
     assert resp.status_code == 429
 
 
+def test_signup_resend_blocked_during_active_lockout(client):
+    """Regression test for the S4 bypass found during live testing: resending
+    signup while locked out must NOT mint a fresh, unlocked OTP row -- that
+    would silently reset the lockout counter and defeat S4 entirely."""
+    otp1 = _signup(client, email="grace@example.com").get_json()["dev_otp"]
+
+    for _ in range(OTP_MAX_ATTEMPTS):
+        resp = client.post("/auth/verify-otp", json={"email": "grace@example.com", "otp": "000000"})
+        assert resp.status_code == 400
+
+    # Confirm locked out -- even the correct code for OTP #1 is rejected.
+    resp = client.post("/auth/verify-otp", json={"email": "grace@example.com", "otp": otp1})
+    assert resp.status_code == 429
+
+    # THE BUG: resend signup mid-lockout used to mint a fresh, unlocked OTP.
+    resend = _signup(client, email="grace@example.com")
+    assert resend.status_code == 200
+    assert resend.get_json()["message"] == "If that email can be registered, a verification code has been sent."
+    # No new OTP was issued -- the lockout is still in force, nothing to return.
+    assert "dev_otp" not in resend.get_json()
+
+    # The account must still be locked out -- a wrong guess gets the generic
+    # error (not a fresh "attempt 1/5"), and the ORIGINAL correct code is
+    # still rejected too, proving no new row was created.
+    resp = client.post("/auth/verify-otp", json={"email": "grace@example.com", "otp": "111111"})
+    assert resp.status_code == 429
+    resp = client.post("/auth/verify-otp", json={"email": "grace@example.com", "otp": otp1})
+    assert resp.status_code == 429
+
+
+def test_signup_resend_allowed_after_lockout_expires(client, db_session):
+    """Once the lockout window has actually passed, a resend should issue a
+    normal fresh OTP again -- the fix must not block resends forever."""
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import select
+
+    from src.api.auth.models import Otp, User
+
+    _signup(client, email="heidi@example.com")
+    for _ in range(OTP_MAX_ATTEMPTS):
+        client.post("/auth/verify-otp", json={"email": "heidi@example.com", "otp": "000000"})
+
+    # Simulate the lockout window having already passed.
+    user = db_session.scalar(select(User).where(User.email == "heidi@example.com"))
+    otp_row = db_session.scalar(select(Otp).where(Otp.user_id == user.id))
+    otp_row.locked_until = datetime.now(timezone.utc) - timedelta(minutes=1)
+    db_session.commit()
+
+    resend = _signup(client, email="heidi@example.com")
+    assert resend.status_code == 200
+    assert "dev_otp" in resend.get_json()
+
+    new_otp = resend.get_json()["dev_otp"]
+    resp = client.post("/auth/verify-otp", json={"email": "heidi@example.com", "otp": new_otp})
+    assert resp.status_code == 200
+
+
 def test_otp_value_never_logged(client, caplog):
     """S5: grepping captured log output for the OTP value must find nothing."""
     with caplog.at_level(logging.DEBUG):

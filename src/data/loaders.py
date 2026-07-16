@@ -458,7 +458,7 @@ def load_phishtank(path: str | Path) -> pd.DataFrame:
             .date()
             .isoformat()
         )
-    except Exception:
+    except Exception:  # noqa: BLE001 - malformed timestamps must not crash loading
         snapshot_date = "unknown"
 
     result = df[["url", "label", "submission_time"]].reset_index(drop=True)

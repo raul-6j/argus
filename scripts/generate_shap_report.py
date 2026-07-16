@@ -20,7 +20,6 @@ import matplotlib  # noqa: E402
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
-import pandas as pd  # noqa: E402
 import shap  # noqa: E402
 import yaml  # noqa: E402
 from sklearn.metrics import f1_score, precision_score, recall_score  # noqa: E402

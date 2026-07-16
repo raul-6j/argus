@@ -30,6 +30,7 @@ from src.api.auth.utils import get_secret_key
 from src.api.db import create_db_engine, create_session_factory, init_db
 from src.api.detect import detect_bp
 from src.api.health import health_bp
+from src.api.threat_intel.phishtank import load_phishtank_hostname_index, load_phishtank_index
 from src.api.vault.routes import vault_bp
 from src.models.contract import FEATURE_ORDER
 from src.models.explain import build_explainer, explain_single
@@ -39,11 +40,51 @@ logger = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_API_CONFIG_PATH = PROJECT_ROOT / "configs" / "api_config.yaml"
 _DEFAULT_MODEL_CONFIG_PATH = PROJECT_ROOT / "configs" / "model_config.yaml"
+_DEFAULT_THREAT_INTEL_CONFIG_PATH = PROJECT_ROOT / "configs" / "threat_intel_config.yaml"
 
 
 def _load_config(path: Path) -> dict[str, Any]:
     with path.open("r", encoding="utf-8") as fh:
         return yaml.safe_load(fh)
+
+
+def _load_threat_intel(config_path: Path) -> dict[str, Any]:
+    """Build the threat-intel pre-filter state (DEC-010).
+
+    Backward compatible by design: a deployment without
+    ``threat_intel_config.yaml`` (or with ``enabled: false``) gets an
+    inert, always-miss pre-filter, and ``/detect`` behaves exactly as it did
+    before Phase 9.1.
+
+    Args:
+        config_path: Path to ``threat_intel_config.yaml``.
+
+    Returns:
+        ``{"enabled": bool, "phishtank_index": frozenset[str],
+        "phishtank_hostname_index": frozenset[str]}``.
+    """
+    empty_state = {
+        "enabled": False,
+        "phishtank_index": frozenset(),
+        "phishtank_hostname_index": frozenset(),
+    }
+    if not config_path.is_file():
+        logger.info("No threat_intel_config.yaml found at %s — pre-filter disabled.", config_path)
+        return empty_state
+
+    config = _load_config(config_path)
+    if not config.get("enabled", False):
+        return empty_state
+
+    snapshot_path = PROJECT_ROOT / config["phishtank_snapshot_path"]
+    subdomain_platforms = frozenset(
+        p.lower() for p in config.get("subdomain_per_tenant_platforms", [])
+    )
+    return {
+        "enabled": True,
+        "phishtank_index": load_phishtank_index(snapshot_path),
+        "phishtank_hostname_index": load_phishtank_hostname_index(snapshot_path, subdomain_platforms),
+    }
 
 
 def _load_background_sample(train_path: Path, max_rows: int = 200) -> Optional[np.ndarray]:
@@ -92,7 +133,9 @@ def _warmup(pipeline: Any, explainer: Any, model_type: str) -> None:
 
 
 def create_app(
-    config_path: Optional[str] = None, model_config_path: Optional[str] = None
+    config_path: Optional[str] = None,
+    model_config_path: Optional[str] = None,
+    threat_intel_config_path: Optional[str] = None,
 ) -> Flask:
     """Build and configure the ARGUS Flask application.
 
@@ -103,6 +146,11 @@ def create_app(
         model_config_path: Path to ``model_config.yaml`` (source of the
             calibrated decision threshold, DEC-017). Defaults to the
             project's ``configs/model_config.yaml``.
+        threat_intel_config_path: Path to ``threat_intel_config.yaml``
+            (DEC-010). Defaults to the project's
+            ``configs/threat_intel_config.yaml``; if that file doesn't
+            exist, the pre-filter is disabled and ``/detect`` behaves as it
+            did before Phase 9.1.
 
     Returns:
         A configured :class:`flask.Flask` instance, ready to serve.
@@ -155,6 +203,10 @@ def create_app(
         max_workers=api_config.get("enrichment_max_workers", 8)
     )
 
+    threat_intel = _load_threat_intel(
+        Path(threat_intel_config_path) if threat_intel_config_path else _DEFAULT_THREAT_INTEL_CONFIG_PATH
+    )
+
     app.extensions["argus"] = {
         "pipeline": pipeline,
         "explainer": explainer,
@@ -162,6 +214,7 @@ def create_app(
         "threshold": model_config.get("threshold", 0.5),
         "executor": executor,
         "config": api_config,
+        "threat_intel": threat_intel,
     }
 
     app.register_blueprint(health_bp)

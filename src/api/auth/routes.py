@@ -136,9 +136,32 @@ def signup():
 
         if existing is not None and not existing.email_verified:
             # Abandoned signup — allow a fresh OTP without disturbing state
-            # beyond the password (a resend-style retry).
+            # beyond the password (a resend-style retry) -- UNLESS the
+            # account is currently serving an S4 lockout from an earlier
+            # code. verify_otp() only ever checks the newest non-consumed
+            # row, so minting a fresh, unlocked row here would silently
+            # reset the lockout counter and defeat S4 entirely (see
+            # DEC-024): an attacker could burn 5 guesses, resend signup for
+            # a clean row, and repeat indefinitely.
             existing.password_hash = hash_password(data["password"])
             user = existing
+
+            now = datetime.now(timezone.utc)
+            active_otp = session.scalar(
+                select(Otp)
+                .where(Otp.user_id == user.id, Otp.consumed.is_(False))
+                .order_by(Otp.created_at.desc())
+            )
+            if (
+                active_otp is not None
+                and active_otp.locked_until is not None
+                and as_aware_utc(active_otp.locked_until) > now
+            ):
+                session.commit()
+                logger.info(
+                    "Signup resend blocked for user_id=%s: OTP lockout still active", user.id
+                )
+                return jsonify(message=_GENERIC_SIGNUP_MESSAGE), 200
         else:
             user = User(email=data["email"], password_hash=hash_password(data["password"]))
             session.add(user)
