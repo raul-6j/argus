@@ -11,10 +11,18 @@ from unittest import mock
 import pytest
 
 from src.data.loaders import normalize_url
+from src.features.page_artifacts import PageArtifacts
 from src.features.pipeline import FeatureVector
 from src.models.contract import FEATURE_ORDER
 
 MODULE = "src.api.detect"
+
+# A page_artifacts.fetch() double whose fetch "fails" (html=None) -- keeps
+# enrich=true tests network-free and detection-signal-neutral by default,
+# same spirit as mocking extract_features for the model path.
+_FAILED_FETCH_ARTIFACTS = PageArtifacts(
+    requested_url="https://example.com", html=None, fetch_error="mocked: no network in tests"
+)
 
 # Raw live-extractor-shaped features (same shape feature_adapter tests use),
 # not already-bucketed contract values — adapt_to_training_contract() does
@@ -101,11 +109,13 @@ def test_detect_default_enrich_false_no_network(client):
 def test_detect_enrich_true_uses_executor(client):
     """enrich=true submits the full extraction to the persistent thread pool."""
     fv = _fake_feature_vector("https://example.com", _LEGIT_RAW_FEATURES)
-    with mock.patch(f"{MODULE}.extract_features", return_value=fv) as m:
+    with mock.patch(f"{MODULE}.extract_features", return_value=fv) as m, mock.patch(
+        f"{MODULE}.page_artifacts.fetch", return_value=_FAILED_FETCH_ARTIFACTS
+    ):
         resp = client.post("/detect", json={"url": "https://example.com", "enrich": True})
     assert resp.status_code == 200
     m.assert_called_once_with(
-        "https://example.com", fetch_html=True, include_domain=True
+        "https://example.com", html=None, include_domain=True
     )
 
 
@@ -136,6 +146,90 @@ def test_all_detect_responses_have_latency_ms(client):
     with mock.patch(f"{MODULE}.extract_features", return_value=fv):
         resp = client.post("/detect", json={"url": "https://example.com"})
     assert "latency_ms" in resp.get_json()
+
+
+# --------------------------------------------------------------------------- #
+# Detection fusion layer wiring (Phase 1, DEC-A)
+# --------------------------------------------------------------------------- #
+
+
+def test_detect_fast_path_omits_signals_and_risk_score(client):
+    """The default (enrich=false) response has no risk_score/signals keys at
+    all -- additive fields never appear on the pre-Phase-1 fast path."""
+    fv = _fake_feature_vector("https://example.com", _LEGIT_RAW_FEATURES)
+    with mock.patch(f"{MODULE}.extract_features", return_value=fv):
+        resp = client.post("/detect", json={"url": "https://example.com"})
+    body = resp.get_json()
+    assert "risk_score" not in body
+    assert "signals" not in body
+
+
+def test_detect_enrich_true_includes_signals_and_risk_score(client):
+    """enrich=true with the fusion layer enabled adds risk_score + signals."""
+    fv = _fake_feature_vector("https://example.com", _LEGIT_RAW_FEATURES)
+    with mock.patch(f"{MODULE}.extract_features", return_value=fv), mock.patch(
+        f"{MODULE}.page_artifacts.fetch", return_value=_FAILED_FETCH_ARTIFACTS
+    ):
+        resp = client.post("/detect", json={"url": "https://example.com", "enrich": True})
+    body = resp.get_json()
+    assert "risk_score" in body
+    assert isinstance(body["signals"], list)
+    # typosquat always runs even when the page fetch fails -- neutral here
+    # since "example.com" isn't a look-alike of any reference brand.
+    assert any(s["name"] == "typosquat" for s in body["signals"])
+
+
+def test_detect_typosquat_signal_triggers_and_flips_verdict(client):
+    """A look-alike domain the model alone would score below-threshold is
+    caught by the typosquat signal and flips the fused verdict to phishing.
+
+    Uses a deliberately borderline (not maximally-legitimate) raw feature
+    set so the fusion math robustly crosses the 0.30 threshold — this is
+    the DEC-018 failure mode being closed: domain-level signals alone are
+    ambiguous/clean, but the URL itself is a clear look-alike.
+    """
+    borderline_features = dict(_LEGIT_RAW_FEATURES)
+    borderline_features.update(
+        num_hyphens_in_hostname=1,
+        internal_tag_link_ratio=0.6,
+        domain_age_days=200,
+        days_until_expiry=200,
+    )
+    fv = _fake_feature_vector("https://paypal-secure-login.net", borderline_features)
+    with mock.patch(f"{MODULE}.extract_features", return_value=fv), mock.patch(
+        f"{MODULE}.page_artifacts.fetch", return_value=_FAILED_FETCH_ARTIFACTS
+    ):
+        resp = client.post(
+            "/detect", json={"url": "https://paypal-secure-login.net", "enrich": True}
+        )
+    body = resp.get_json()
+    assert resp.status_code == 200
+    assert body["label"] == "phishing"
+    assert body["source"] == "fusion"
+    typo_signals = [s for s in body["signals"] if s["name"] == "typosquat"]
+    assert len(typo_signals) == 1
+    assert typo_signals[0]["triggered"] is True
+    assert typo_signals[0]["evidence"]["impersonated_brand"] == "PayPal"
+
+
+def test_detect_fusion_disabled_matches_legacy_model_only_behavior(app, client):
+    """With detection disabled, enrich=true reproduces the exact pre-Phase-1
+    model-only response shape (no risk_score/signals keys)."""
+    argus = app.extensions["argus"]
+    original_detection = argus["detection"]
+    argus["detection"] = {"enabled": False, "config": {"enabled": False}, "brand_index": None}
+    try:
+        fv = _fake_feature_vector("https://example.com", _LEGIT_RAW_FEATURES)
+        with mock.patch(f"{MODULE}.extract_features", return_value=fv), mock.patch(
+            f"{MODULE}.page_artifacts.fetch", return_value=_FAILED_FETCH_ARTIFACTS
+        ):
+            resp = client.post("/detect", json={"url": "https://example.com", "enrich": True})
+        body = resp.get_json()
+        assert body["source"] == "model"
+        assert "risk_score" not in body
+        assert "signals" not in body
+    finally:
+        argus["detection"] = original_detection
 
 
 # --------------------------------------------------------------------------- #

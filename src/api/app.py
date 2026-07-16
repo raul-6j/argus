@@ -32,6 +32,7 @@ from src.api.detect import detect_bp
 from src.api.health import health_bp
 from src.api.threat_intel.phishtank import load_phishtank_hostname_index, load_phishtank_index
 from src.api.vault.routes import vault_bp
+from src.detection.brand_reference import load_brand_index
 from src.models.contract import FEATURE_ORDER
 from src.models.explain import build_explainer, explain_single
 
@@ -41,6 +42,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_API_CONFIG_PATH = PROJECT_ROOT / "configs" / "api_config.yaml"
 _DEFAULT_MODEL_CONFIG_PATH = PROJECT_ROOT / "configs" / "model_config.yaml"
 _DEFAULT_THREAT_INTEL_CONFIG_PATH = PROJECT_ROOT / "configs" / "threat_intel_config.yaml"
+_DEFAULT_DETECTION_CONFIG_PATH = PROJECT_ROOT / "configs" / "detection_config.yaml"
 
 
 def _load_config(path: Path) -> dict[str, Any]:
@@ -76,7 +78,7 @@ def _load_threat_intel(config_path: Path) -> dict[str, Any]:
     if not config.get("enabled", False):
         return empty_state
 
-    snapshot_path = PROJECT_ROOT / config["phishtank_snapshot_path"]
+    snapshot_path = _resolve_threat_feed_snapshot(config)
     subdomain_platforms = frozenset(
         p.lower() for p in config.get("subdomain_per_tenant_platforms", [])
     )
@@ -85,6 +87,70 @@ def _load_threat_intel(config_path: Path) -> dict[str, Any]:
         "phishtank_index": load_phishtank_index(snapshot_path),
         "phishtank_hostname_index": load_phishtank_hostname_index(snapshot_path, subdomain_platforms),
     }
+
+
+def _resolve_threat_feed_snapshot(config: dict[str, Any]) -> Path:
+    """Resolve the active threat-feed snapshot path (Phase 1, D1).
+
+    Prefers the ``active_snapshot.txt`` pointer written by
+    ``scripts/refresh_threat_feeds.py`` inside ``config["feeds_dir"]`` (if
+    present) over the manually-pinned ``phishtank_snapshot_path`` — this is
+    what lets a scheduled feed refresh actually take effect on the next
+    process start, without any code change. Falls back to
+    ``phishtank_snapshot_path`` unchanged when no pointer exists yet, so a
+    deployment that has never run the refresh script behaves exactly as
+    before D1 existed.
+
+    Args:
+        config: Loaded ``threat_intel_config.yaml`` contents.
+
+    Returns:
+        An absolute path to the CSV snapshot to load.
+    """
+    feeds_dir = config.get("feeds_dir")
+    if feeds_dir:
+        pointer_path = PROJECT_ROOT / feeds_dir / "active_snapshot.txt"
+        if pointer_path.is_file():
+            try:
+                relative = pointer_path.read_text(encoding="utf-8").strip()
+                if relative:
+                    return PROJECT_ROOT / relative
+            except Exception as exc:  # noqa: BLE001 - a broken pointer must never crash startup
+                logger.warning(
+                    "Failed to read active_snapshot pointer %s: %s — falling back to "
+                    "phishtank_snapshot_path.",
+                    pointer_path,
+                    exc,
+                )
+    return PROJECT_ROOT / config["phishtank_snapshot_path"]
+
+
+def _load_detection(config_path: Path) -> dict[str, Any]:
+    """Build the detection/fusion-layer state (Phase 1, DEC-A).
+
+    Backward compatible by design: a deployment without
+    ``detection_config.yaml`` (or with ``enabled: false``) gets an inert,
+    disabled state, and ``/detect``/``/explain`` behave exactly as they did
+    before Phase 1 — mirrors :func:`_load_threat_intel`'s convention.
+
+    Args:
+        config_path: Path to ``detection_config.yaml``.
+
+    Returns:
+        ``{"enabled": bool, "config": dict, "brand_index": BrandIndex | None}``.
+    """
+    empty_state = {"enabled": False, "config": {"enabled": False}, "brand_index": None}
+    if not config_path.is_file():
+        logger.info("No detection_config.yaml found at %s — detection fusion layer disabled.", config_path)
+        return empty_state
+
+    config = _load_config(config_path)
+    if not config.get("enabled", False):
+        return {"enabled": False, "config": config, "brand_index": None}
+
+    brands_path = PROJECT_ROOT / config.get("brand_reference_path", "data/reference/brands.json")
+    brand_index = load_brand_index(brands_path)
+    return {"enabled": True, "config": config, "brand_index": brand_index}
 
 
 def _load_background_sample(train_path: Path, max_rows: int = 200) -> Optional[np.ndarray]:
@@ -136,6 +202,7 @@ def create_app(
     config_path: Optional[str] = None,
     model_config_path: Optional[str] = None,
     threat_intel_config_path: Optional[str] = None,
+    detection_config_path: Optional[str] = None,
 ) -> Flask:
     """Build and configure the ARGUS Flask application.
 
@@ -151,6 +218,11 @@ def create_app(
             ``configs/threat_intel_config.yaml``; if that file doesn't
             exist, the pre-filter is disabled and ``/detect`` behaves as it
             did before Phase 9.1.
+        detection_config_path: Path to ``detection_config.yaml`` (Phase 1,
+            DEC-A). Defaults to the project's
+            ``configs/detection_config.yaml``; if that file doesn't exist
+            or is disabled, the fusion layer is inert and ``/detect``/
+            ``/explain`` behave exactly as they did before Phase 1.
 
     Returns:
         A configured :class:`flask.Flask` instance, ready to serve.
@@ -207,6 +279,10 @@ def create_app(
         Path(threat_intel_config_path) if threat_intel_config_path else _DEFAULT_THREAT_INTEL_CONFIG_PATH
     )
 
+    detection = _load_detection(
+        Path(detection_config_path) if detection_config_path else _DEFAULT_DETECTION_CONFIG_PATH
+    )
+
     app.extensions["argus"] = {
         "pipeline": pipeline,
         "explainer": explainer,
@@ -215,6 +291,7 @@ def create_app(
         "executor": executor,
         "config": api_config,
         "threat_intel": threat_intel,
+        "detection": detection,
     }
 
     app.register_blueprint(health_bp)

@@ -17,8 +17,26 @@ class DetectRequestSchema(Schema):
     enrich = fields.Bool(load_default=False)
 
 
+class RiskSignalSchema(Schema):
+    """One entry in /detect's or /explain's ``signals`` list (Phase 1, DEC-A)."""
+
+    name = fields.Str(required=True)
+    triggered = fields.Bool(required=True)
+    score = fields.Float(required=True)
+    direction = fields.Str(
+        required=True, validate=validate.OneOf(["phishing", "legitimate", "neutral"])
+    )
+    evidence = fields.Dict(required=True)
+
+
 class DetectResponseSchema(Schema):
-    """POST /detect response body."""
+    """POST /detect response body.
+
+    ``risk_score`` and ``signals`` (Phase 1, DEC-A) are only present when
+    the request enriched (``enrich: true``) and the detection fusion layer
+    is enabled — additive fields, omitted otherwise for backward
+    compatibility with pre-Phase-1 clients.
+    """
 
     url = fields.Str(required=True)
     label = fields.Str(required=True, validate=validate.OneOf(["phishing", "legitimate"]))
@@ -26,6 +44,8 @@ class DetectResponseSchema(Schema):
     verdict = fields.Str(required=True, validate=validate.OneOf(["phishing", "legitimate"]))
     source = fields.Str(required=True)
     latency_ms = fields.Float(required=True)
+    risk_score = fields.Float(required=False)
+    signals = fields.List(fields.Nested(RiskSignalSchema), required=False)
 
 
 class ExplainRequestSchema(Schema):
@@ -43,10 +63,18 @@ class ShapAttributionSchema(Schema):
 
 
 class ExplainResponseSchema(Schema):
-    """POST /explain response body."""
+    """POST /explain response body.
+
+    ``signals`` and ``plain_explanation`` (Phase 1, B2/DEC-A) are always
+    present — ``signals`` is an empty list and ``plain_explanation`` falls
+    back to a SHAP-only sentence when the detection fusion layer is
+    disabled.
+    """
 
     url = fields.Str(required=True)
     top5_features = fields.List(fields.Nested(ShapAttributionSchema), required=True)
+    signals = fields.List(fields.Nested(RiskSignalSchema), required=True)
+    plain_explanation = fields.Str(required=True)
     latency_ms = fields.Float(required=True)
 
 
