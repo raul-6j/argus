@@ -1,0 +1,8 @@
+{
+  "name": "argus-client-sdk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ARGUS developer API (/v1/*) thin JavaScript client (Phase 2, C3). No dependencies -- uses the built-in fetch API. Not published; vendor argus-client.js directly into your project.",
+  "type": "module",
+  "main": "argus-client.js"
+}
