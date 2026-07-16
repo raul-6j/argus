@@ -18,6 +18,20 @@ data:
   val_path: data/processed/val.parquet
   test_path: data/processed/test.parquet
 
+# --- Model serving (Phase 2, G1) ---
+# "sklearn" (default) uses models/production/model.joblib directly, exactly
+# as before Phase 2. "onnx" uses models/production/model.onnx instead for
+# the predict_proba hot path (/detect, /scan, /v1/scan, /v1/scan/batch) --
+# /explain and /v1/explain always keep using the sklearn pipeline for SHAP
+# regardless of this setting. Run `python scripts/export_onnx.py` first --
+# it refuses to write model.onnx unless ONNX output matches the sklearn
+# pipeline within tolerance on the real test set (see reports/onnx_parity.json).
+# A missing/unreadable model.onnx or any ONNX load failure falls back to
+# sklearn automatically (src/serving/onnx_runtime.py::load_predictor).
+serving:
+  backend: sklearn
+  onnx_path: models/production/model.onnx
+
 output:
   candidates_dir: models/candidates/
   production_dir: models/production/
