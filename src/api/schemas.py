@@ -90,3 +90,54 @@ class ErrorResponseSchema(Schema):
     """Shape of every 4xx/5xx error body: ``{"error": "..."}``."""
 
     error = fields.Str(required=True)
+
+
+# --------------------------------------------------------------------------- #
+# Phase 2 — C1 (public scan + shareable report)
+# --------------------------------------------------------------------------- #
+
+
+class ScanRequestSchema(Schema):
+    """POST /scan request body: ``{"url": "..."}``. Always a full URL, no
+    ``enrich`` flag -- /scan always enriches (see src/api/scan/routes.py)."""
+
+    url = fields.Str(required=True, validate=validate.Length(min=1))
+
+
+class ScanResponseSchema(Schema):
+    """POST /scan (201) and GET /scan/<scan_id> (200) response body."""
+
+    scan_id = fields.Str(required=True)
+    url = fields.Str(required=True)
+    label = fields.Str(required=True, validate=validate.OneOf(["phishing", "legitimate"]))
+    confidence = fields.Float(required=True)
+    risk_score = fields.Float(required=True)
+    signals = fields.List(fields.Nested(RiskSignalSchema), required=True)
+    plain_explanation = fields.Str(required=True)
+    expires_at = fields.Str(required=True)
+    latency_ms = fields.Float(required=True)
+
+
+# --------------------------------------------------------------------------- #
+# Phase 2 — C3 (developer API /v1/*)
+# --------------------------------------------------------------------------- #
+
+
+class V1ScanRequestSchema(Schema):
+    """POST /v1/scan request body: ``{"url": "...", "enrich": true}``."""
+
+    url = fields.Str(required=True, validate=validate.Length(min=1))
+    enrich = fields.Bool(load_default=False)
+
+
+class V1ScanBatchRequestSchema(Schema):
+    """POST /v1/scan/batch request body: ``{"urls": [...], "enrich": false}``."""
+
+    urls = fields.List(fields.Str(), required=True, validate=validate.Length(min=1, max=50))
+    enrich = fields.Bool(load_default=False)
+
+
+class V1ExplainRequestSchema(Schema):
+    """POST /v1/explain request body: ``{"url": "..."}``."""
+
+    url = fields.Str(required=True, validate=validate.Length(min=1))

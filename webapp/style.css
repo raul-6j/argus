@@ -1,0 +1,238 @@
+/* ARGUS public web app — self-contained styling, no external fonts/CDNs.
+   Theme-aware: defaults to the OS preference, but an explicit toggle
+   (data-theme on <html>) always wins in either direction. */
+
+:root {
+  --bg: #ffffff;
+  --bg-alt: #f5f6f8;
+  --text: #1a1a1a;
+  --text-muted: #5a5f6a;
+  --border: #e2e4e9;
+  --accent: #2952e3;
+  --phishing: #c62828;
+  --phishing-bg: #fdecea;
+  --legitimate: #2e7d32;
+  --legitimate-bg: #e8f5e9;
+  --neutral-bg: #f0f1f3;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14161a;
+    --bg-alt: #1c1f25;
+    --text: #eef0f3;
+    --text-muted: #9aa0ab;
+    --border: #2c2f36;
+    --accent: #6d8dff;
+    --phishing: #ff6b6b;
+    --phishing-bg: #3a1f1f;
+    --legitimate: #6fcf76;
+    --legitimate-bg: #1c2e1e;
+    --neutral-bg: #23262c;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #14161a; --bg-alt: #1c1f25; --text: #eef0f3; --text-muted: #9aa0ab;
+  --border: #2c2f36; --accent: #6d8dff; --phishing: #ff6b6b; --phishing-bg: #3a1f1f;
+  --legitimate: #6fcf76; --legitimate-bg: #1c2e1e; --neutral-bg: #23262c;
+}
+
+:root[data-theme="light"] {
+  --bg: #ffffff; --bg-alt: #f5f6f8; --text: #1a1a1a; --text-muted: #5a5f6a;
+  --border: #e2e4e9; --accent: #2952e3; --phishing: #c62828; --phishing-bg: #fdecea;
+  --legitimate: #2e7d32; --legitimate-bg: #e8f5e9; --neutral-bg: #f0f1f3;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+.wrap {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 2.5rem 1.25rem 4rem;
+}
+
+header.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 2rem;
+}
+
+header.brand .mark {
+  font-size: 1.5rem;
+}
+
+header.brand h1 {
+  font-size: 1.25rem;
+  margin: 0;
+}
+
+.tagline {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  margin: 0 0 2rem;
+}
+
+.scan-form {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.scan-form input[type="url"] {
+  flex: 1 1 300px;
+  min-width: 0;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-alt);
+  color: var(--text);
+}
+
+button {
+  padding: 0.75rem 1.4rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.disclosure {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  margin-top: 0.75rem;
+  line-height: 1.4;
+}
+
+.card {
+  margin-top: 2rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+  background: var(--bg-alt);
+}
+
+.hidden { display: none; }
+
+.verdict-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.verdict-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+}
+
+.verdict-badge.phishing { background: var(--phishing-bg); color: var(--phishing); }
+.verdict-badge.legitimate { background: var(--legitimate-bg); color: var(--legitimate); }
+
+.confidence {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.scanned-url {
+  word-break: break-all;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: 0.75rem 0 0;
+}
+
+.signals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 1rem 0;
+}
+
+.signal-badge {
+  font-size: 0.78rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  background: var(--neutral-bg);
+  color: var(--text);
+  cursor: default;
+}
+
+.signal-badge.phishing { background: var(--phishing-bg); color: var(--phishing); }
+.signal-badge.legitimate { background: var(--legitimate-bg); color: var(--legitimate); }
+
+.explanation {
+  font-size: 0.92rem;
+  line-height: 1.5;
+  margin: 0.5rem 0 0;
+}
+
+.share-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.share-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-muted);
+}
+
+.share-row button {
+  padding: 0.5rem 0.9rem;
+  font-size: 0.85rem;
+}
+
+.error-box {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  border-radius: 8px;
+  background: var(--phishing-bg);
+  color: var(--phishing);
+  font-size: 0.9rem;
+}
+
+.meta {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  margin-top: 1rem;
+}
+
+footer {
+  margin-top: 3rem;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  text-align: center;
+}

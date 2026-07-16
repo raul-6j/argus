@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ARGUS — Scan Report</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="brand">
+      <span class="mark">🛡️</span>
+      <h1>ARGUS</h1>
+    </header>
+    <p class="tagline" id="loadingMsg">Loading report...</p>
+
+    <div id="errorBox" class="error-box hidden"></div>
+    <div id="reportCard" class="card hidden"></div>
+
+    <p class="disclosure"><a href="index.html">Scan another URL →</a></p>
+
+    <footer>ARGUS — real-time phishing detection.</footer>
+  </div>
+
+  <script src="report.js"></script>
+  <script>
+    const loadingMsg = document.getElementById("loadingMsg");
+    const errorBox = document.getElementById("errorBox");
+    const reportCard = document.getElementById("reportCard");
+
+    async function init() {
+      const params = new URLSearchParams(location.search);
+      const scanId = params.get("id");
+      if (!scanId) {
+        loadingMsg.textContent = "";
+        showError(errorBox, "No report id given. Scan a URL first.");
+        return;
+      }
+
+      try {
+        const resp = await fetch(`/scan/${encodeURIComponent(scanId)}`);
+        const body = await resp.json();
+        if (!resp.ok) {
+          throw new Error(body.error || `Report not found (HTTP ${resp.status})`);
+        }
+        loadingMsg.textContent = "Shared scan report:";
+        renderReportCard(reportCard, body);
+      } catch (err) {
+        loadingMsg.textContent = "";
+        showError(errorBox, err.message);
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

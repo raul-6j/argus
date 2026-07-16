@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ARGUS — Scan a URL</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="brand">
+      <span class="mark">🛡️</span>
+      <h1>ARGUS</h1>
+    </header>
+    <p class="tagline">Paste a URL to check it for phishing — no account or extension required.</p>
+
+    <form id="scanForm" class="scan-form">
+      <input id="urlInput" type="url" placeholder="https://example.com" required autofocus />
+      <button id="scanBtn" type="submit">Scan</button>
+    </form>
+    <p class="disclosure">
+      ARGUS's server fetches the page you submit to analyze it. Don't scan URLs containing
+      sensitive tokens or personal data in the path/query string.
+    </p>
+
+    <div id="errorBox" class="error-box hidden"></div>
+    <div id="reportCard" class="card hidden"></div>
+
+    <footer>ARGUS — real-time phishing detection.</footer>
+  </div>
+
+  <script src="report.js"></script>
+  <script>
+    const form = document.getElementById("scanForm");
+    const urlInput = document.getElementById("urlInput");
+    const scanBtn = document.getElementById("scanBtn");
+    const errorBox = document.getElementById("errorBox");
+    const reportCard = document.getElementById("reportCard");
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      errorBox.classList.add("hidden");
+      reportCard.classList.add("hidden");
+      scanBtn.disabled = true;
+      scanBtn.textContent = "Scanning...";
+
+      try {
+        const resp = await fetch("/scan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: urlInput.value }),
+        });
+        const body = await resp.json();
+        if (!resp.ok) {
+          throw new Error(body.error || `Scan failed (HTTP ${resp.status})`);
+        }
+        renderReportCard(reportCard, body);
+      } catch (err) {
+        showError(errorBox, err.message);
+      } finally {
+        scanBtn.disabled = false;
+        scanBtn.textContent = "Scan";
+      }
+    });
+  </script>
+</body>
+</html>
