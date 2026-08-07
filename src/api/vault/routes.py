@@ -8,10 +8,11 @@ multiple devices.
 
 from __future__ import annotations
 
-from flask import Blueprint, current_app, g, jsonify, request
+from flask import Blueprint, g, jsonify, request
 from marshmallow import Schema, ValidationError, fields
 
 from src.api.auth.middleware import require_auth
+from src.api.route_utils import db_session, error
 from src.api.vault.models import VaultEntry
 
 vault_bp = Blueprint("vault", __name__, url_prefix="/vault")
@@ -22,19 +23,11 @@ class VaultPutSchema(Schema):
     version = fields.Int(required=True)
 
 
-def _session():
-    return current_app.extensions["argus_auth"]["session_factory"]()
-
-
-def _error(message: str, status: int, **extra):
-    return jsonify(error=message, **extra), status
-
-
 @vault_bp.get("")
 @require_auth
 def get_vault():
     """Fetch the caller's vault blob + version. Empty vault -> version 0."""
-    session = _session()
+    session = db_session()
     try:
         entry = session.get(VaultEntry, g.user_id)
         if entry is None:
@@ -58,15 +51,15 @@ def put_vault():
     try:
         data = VaultPutSchema().load(body)
     except ValidationError as exc:
-        return _error(f"invalid request: {exc.messages}", 400)
+        return error(f"invalid request: {exc.messages}", 400)
 
-    session = _session()
+    session = db_session()
     try:
         entry = session.get(VaultEntry, g.user_id)
         current_version = entry.version if entry is not None else 0
 
         if data["version"] != current_version:
-            return _error(
+            return error(
                 "conflict: vault was updated elsewhere",
                 409,
                 current_version=current_version,

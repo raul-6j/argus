@@ -20,12 +20,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import joblib  # noqa: E402
-import pandas as pd  # noqa: E402
-import yaml  # noqa: E402
+import joblib
+import pandas as pd
+import yaml
 
-from src.features.pipeline import extract_features  # noqa: E402
-from src.models.feature_adapter import adapt_to_training_contract  # noqa: E402
+from src.features.pipeline import extract_features
+from src.models.feature_adapter import adapt_to_training_contract
 
 logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(levelname)-8s %(name)s — %(message)s")
 logger = logging.getLogger("argus.validate_phishtank")

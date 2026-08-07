@@ -1,23 +1,43 @@
-# ARGUS — Threat-intel pre-filter configuration (Phase 9, Task 9.1, DEC-010)
+# ARGUS — Threat-intel pre-filter configuration (Phase 9, Task 9.1, DEC-010;
+# provider abstraction + hot-reload, Phase 5 F6/F7, DEC-035)
 # Loaded once by src/api/app.py::create_app() at process startup, alongside
-# api_config.yaml and model_config.yaml.
+# api_config.yaml and model_config.yaml. Can be reloaded in place, without a
+# restart, by sending the running process SIGHUP (see
+# src/api/app.py::reload_threat_intel, F7) -- pair this with a scheduled
+# `scripts/refresh_threat_feeds.py` run (cron/systemd timer/CI schedule,
+# still external per Iron Law #2 -- this file doesn't invent its own
+# scheduler) followed by `kill -HUP <pid>` to pick up the new snapshot live.
 #
-# Scope note (DEC-010): PhishTank-only for now. The original Phase 9.1
-# design (docs/PHASE_GUIDE.md) also calls for a Google Safe Browsing (GSB)
-# hash-prefix layer and an allowlist (Task 9.2, vault-based) ahead of this
-# check — both deferred. If this file is absent entirely, the pre-filter is
-# disabled and /detect falls straight through to the ML model, unchanged
-# from pre-Phase-9 behavior (backward compatible).
+# Scope note (DEC-010): PhishTank-only originally. DEC-035 (F6) added a
+# pluggable ThreatIntelProvider interface (src/api/threat_intel/providers.py)
+# so a second source can be enabled without any call-site change anywhere in
+# src/api/ -- GSB below is the first one built on it. An allowlist (Task 9.2,
+# vault-based) is still deferred. If this file is absent entirely, the
+# pre-filter is disabled and /detect falls straight through to the ML model,
+# unchanged from pre-Phase-9 behavior (backward compatible).
 
 enabled: true
 
 # Loaded once into an in-memory set at startup (see
-# src/api/threat_intel/phishtank.py) — not re-read per request. Update this
-# path when rotating to a newer snapshot; there is no automatic "latest"
-# discovery (Iron Law #2: no implicit path magic).
+# src/api/threat_intel/phishtank.py) — not re-read per request except via an
+# explicit SIGHUP reload (F7, above). Update this path when rotating to a
+# newer snapshot; there is no automatic "latest" discovery (Iron Law #2: no
+# implicit path magic).
 phishtank_snapshot_path: data/raw/phishtank_2026-07-02.csv
 
-# Placeholder — not implemented yet (needs a GSB_API_KEY). See DEC-010.
+# Google Safe Browsing v4 threatMatches:find lookup (DEC-035, F6) -- a live,
+# per-URL check against Google's blocklist, checked BEFORE PhishTank when
+# enabled (fresher than a periodically-refreshed static snapshot). Requires
+# BOTH this flag AND a GSB_API_KEY environment variable to be set; either
+# alone leaves GSB disabled (src/api/threat_intel/providers.py::build_providers
+# logs a warning in that case, doesn't fail startup). Deliberately the
+# simpler "lookup" API, not the full hash-prefix Update API DEC-010's
+# original design sketched -- that needs a locally-synced, periodically
+# reconciled hash-prefix database, real infrastructure this project doesn't
+# have; getting that subtly wrong is worse than not having it. Trade-off:
+# threatMatches:find sends each checked URL to Google over the network (see
+# GoogleSafeBrowsingProvider's docstring for the privacy reasoning) and is
+# TTL-cached for 30 minutes per URL to bound both latency and API quota use.
 gsb_enabled: false
 
 # Hosting platforms where each tenant gets a dedicated, attacker-controlled
@@ -50,13 +70,13 @@ subdomain_per_tenant_platforms:
 # `scripts/refresh_threat_feeds.py` downloads each feed below, normalizes it
 # to the same (url, verified, online) schema `phishtank_snapshot_path`
 # already uses, dedupes across feeds, and writes a dated snapshot into
-# `feeds_dir` plus an `active_snapshot.txt` pointer. On the *next* process
-# start, `src/api/app.py::_resolve_threat_feed_snapshot` prefers that
-# pointer over the manually-pinned `phishtank_snapshot_path` above — so
-# running the refresh script and restarting the API is enough to pick up
-# fresher data, no code change needed. Never auto-reloads mid-process (the
-# prefilter index is still loaded once at startup, matching the existing
-# "load once, not per-request" convention).
+# `feeds_dir` plus an `active_snapshot.txt` pointer. `src/api/app.py::
+# _resolve_threat_feed_snapshot` prefers that pointer over the
+# manually-pinned `phishtank_snapshot_path` above whenever the threat-intel
+# state is (re)built -- at process startup, or via a live SIGHUP reload (F7,
+# see the top of this file) after running the refresh script. A SIGHUP is
+# still a deliberate, explicit trigger, not automatic mid-process polling --
+# matches every other "load once" module in this project (Iron Law #2).
 feeds_dir: data/raw/feeds
 
 feeds:

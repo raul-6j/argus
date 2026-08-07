@@ -17,16 +17,16 @@ from concurrent.futures import TimeoutError as FuturesTimeoutError
 from flask import Blueprint, current_app, jsonify, request
 from marshmallow import ValidationError
 
+from src.api.route_utils import check_url, error, latency_ms, risk_bands_config
 from src.api.schemas import DetectRequestSchema, ExplainRequestSchema
-from src.api.threat_intel.prefilter import check_prefilter
-from src.detection import run_detection
+from src.api.verdict import model_proba, prefilter_source, resolve_verdict
 from src.detection.explanation import explain_plain
+from src.detection.types import risk_band_for_score
 from src.features import page_artifacts
 from src.features.pipeline import extract_features
 from src.models.explain import explain_single
 from src.models.feature_adapter import adapt_to_training_contract
 from src.serving.cache import cache_key
-from src.utils.validators import validate_url
 
 logger = logging.getLogger(__name__)
 
@@ -41,10 +41,6 @@ _ENRICHMENT_TIMEOUT_S: float = 15.0
 
 _detect_request_schema = DetectRequestSchema()
 _explain_request_schema = ExplainRequestSchema()
-
-
-def _error(message: str, status: int):
-    return jsonify(error=message), status
 
 
 def _run_enriched_extraction(url: str):
@@ -123,82 +119,72 @@ def detect():
     try:
         data = _detect_request_schema.load(body)
     except ValidationError as exc:
-        return _error(f"invalid request: {exc.messages}", 400)
+        return error(f"invalid request: {exc.messages}", 400)
 
     url = data["url"]
-    ok, reason = validate_url(url, allow_localhost=current_app.config.get("ALLOW_LOCALHOST", False))
+    ok, reason = check_url(url)
     if not ok:
-        return _error(reason, 400)
+        return error(reason, 400)
 
     argus = current_app.extensions["argus"]
 
-    threat_intel = argus.get("threat_intel", {})
-    if threat_intel.get("enabled"):
-        # Always checked BEFORE any cache lookup below -- a URL already
-        # known-bad short-circuits regardless of what might be cached for
-        # it, so a newly-blocklisted URL is never masked by a stale cached
-        # "legitimate" verdict (Phase 2, G1).
-        source = check_prefilter(
-            url,
-            threat_intel["phishtank_index"],
-            threat_intel.get("phishtank_hostname_index", frozenset()),
+    # Always checked BEFORE any cache lookup below -- a URL already
+    # known-bad short-circuits regardless of what might be cached for it, so
+    # a newly-blocklisted URL is never masked by a stale cached
+    # "legitimate" verdict (Phase 2, G1).
+    source = prefilter_source(url, argus)
+    if source is not None:
+        return jsonify(
+            url=url,
+            label="phishing",
+            confidence=1.0,
+            verdict="phishing",
+            source=source,
+            latency_ms=latency_ms(start),
         )
-        if source is not None:
-            latency_ms = round((time.perf_counter() - start) * 1000, 3)
-            return jsonify(
-                url=url,
-                label="phishing",
-                confidence=1.0,
-                verdict="phishing",
-                source=source,
-                latency_ms=latency_ms,
-            )
 
     cache = argus.get("cache")
     key = cache_key(url, data["enrich"]) if cache is not None else None
     cached = cache.get(key) if cache is not None else None
     if cached is not None:
-        latency_ms = round((time.perf_counter() - start) * 1000, 3)
-        return jsonify(url=url, latency_ms=latency_ms, **cached)
+        return jsonify(url=url, latency_ms=latency_ms(start), **cached)
 
-    fv, artifacts = _extract_with_bound(url, data["enrich"])
+    enrich = data["enrich"]
+    fv, artifacts = _extract_with_bound(url, enrich)
     model_input = adapt_to_training_contract(fv.features)
-    proba = float(argus["predictor"].predict_proba([model_input.to_vector()])[0][1])
 
-    # Detection fusion layer (Phase 1, DEC-A) only runs on the enriched
-    # path — page-dependent signals (favicon match, brand mismatch) need
-    # the fetched page, and the default hostname-only fast path must stay
-    # byte-for-byte unchanged from before Phase 1.
-    detection_state = argus.get("detection", {})
-    response = {"url": url, "latency_ms": None}
-    if data["enrich"] and detection_state.get("enabled"):
-        fused = run_detection(
-            url,
-            model_proba=proba,
-            page_artifacts=artifacts,
-            html_features=fv.features,
-            brand_index=detection_state["brand_index"],
-            config=detection_state["config"],
-        )
-        response["label"] = fused.label
-        response["confidence"] = fused.confidence
-        response["verdict"] = fused.label
-        response["source"] = fused.decisive_source
-        response["risk_score"] = fused.risk_score
-        response["signals"] = [s.to_dict() for s in fused.signals]
-    else:
-        is_phishing = bool(proba >= argus["threshold"])
-        label = "phishing" if is_phishing else "legitimate"
-        response["label"] = label
-        response["confidence"] = float(proba if is_phishing else 1 - proba)
-        response["verdict"] = label
-        response["source"] = "model"
+    # The detection fusion layer (Phase 1, DEC-A) only runs on the enriched
+    # path — page-dependent signals (favicon match, brand mismatch) need the
+    # fetched page, and the default hostname-only fast path must stay
+    # byte-for-byte unchanged from before Phase 1. That fast path also
+    # deliberately omits risk_score/risk_band/signals from the response
+    # entirely, rather than reporting them as model-only values.
+    verdict = resolve_verdict(
+        url,
+        proba=model_proba(model_input, argus),
+        artifacts=artifacts,
+        html_features=fv.features,
+        argus=argus,
+        use_detection=bool(enrich),
+    )
+    response = {
+        "url": url,
+        "latency_ms": None,
+        "label": verdict.label,
+        "confidence": verdict.confidence,
+        "verdict": verdict.label,
+        "source": verdict.source,
+    }
+    if verdict.fused:
+        response["risk_score"] = verdict.risk_score
+        response["risk_band"] = verdict.risk_band(argus)
+        response["signals"] = verdict.signals
 
     if cache is not None:
         cacheable = {k: v for k, v in response.items() if k not in ("url", "latency_ms")}
         cache.set(key, cacheable)
 
-    response["latency_ms"] = round((time.perf_counter() - start) * 1000, 3)
+    response["latency_ms"] = latency_ms(start)
     return jsonify(**response)
 
 
@@ -214,12 +200,12 @@ def explain():
     try:
         data = _explain_request_schema.load(body)
     except ValidationError as exc:
-        return _error(f"invalid request: {exc.messages}", 400)
+        return error(f"invalid request: {exc.messages}", 400)
 
     url = data["url"]
-    ok, reason = validate_url(url, allow_localhost=current_app.config.get("ALLOW_LOCALHOST", False))
+    ok, reason = check_url(url)
     if not ok:
-        return _error(reason, 400)
+        return error(reason, 400)
 
     argus = current_app.extensions["argus"]
     # /explain always enriches — a lexical-only explanation would mostly cite
@@ -236,30 +222,21 @@ def explain():
     # Phase 1 (B2): always compute a fused verdict + plain-language sentence
     # for /explain, even when the fusion layer is disabled — falls back to
     # a SHAP-only sentence with no signals in that case.
-    detection_state = argus.get("detection", {})
-    proba = float(argus["predictor"].predict_proba([model_input.to_vector()])[0][1])
-    if detection_state.get("enabled"):
-        fused = run_detection(
-            url,
-            model_proba=proba,
-            page_artifacts=artifacts,
-            html_features=fv.features,
-            brand_index=detection_state["brand_index"],
-            config=detection_state["config"],
-        )
-        verdict = fused.label
-        signals_payload = [s.to_dict() for s in fused.signals]
-    else:
-        verdict = "phishing" if proba >= argus["threshold"] else "legitimate"
-        signals_payload = []
+    verdict = resolve_verdict(
+        url,
+        proba=model_proba(model_input, argus),
+        artifacts=artifacts,
+        html_features=fv.features,
+        argus=argus,
+        use_detection=True,
+    )
 
-    plain_explanation = explain_plain(top5, signals_payload, verdict)
-
-    latency_ms = round((time.perf_counter() - start) * 1000, 3)
     return jsonify(
         url=url,
         top5_features=top5,
-        signals=signals_payload,
-        plain_explanation=plain_explanation,
-        latency_ms=latency_ms,
+        signals=verdict.signals,
+        risk_score=verdict.risk_score,
+        risk_band=risk_band_for_score(verdict.risk_score, risk_bands_config(argus)),
+        plain_explanation=explain_plain(top5, verdict.signals, verdict.label),
+        latency_ms=latency_ms(start),
     )

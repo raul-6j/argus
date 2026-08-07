@@ -10,6 +10,7 @@ from unittest import mock
 
 import pytest
 
+from src.api.threat_intel.providers import PhishTankProvider
 from src.data.loaders import normalize_url
 from src.features.page_artifacts import PageArtifacts
 from src.features.pipeline import FeatureVector
@@ -254,7 +255,7 @@ def test_prefilter_match_short_circuits_without_calling_model(app, client, _rest
     bad_url = "http://phish-prefilter-test.example.com/login"
     app.extensions["argus"]["threat_intel"] = {
         "enabled": True,
-        "phishtank_index": frozenset({normalize_url(bad_url)}),
+        "providers": [PhishTankProvider(frozenset({normalize_url(bad_url)}))],
     }
 
     with mock.patch(f"{MODULE}.extract_features") as m_extract:
@@ -273,7 +274,7 @@ def test_prefilter_match_short_circuits_without_calling_model(app, client, _rest
 def test_prefilter_miss_falls_through_to_model(app, client, _restore_threat_intel):
     app.extensions["argus"]["threat_intel"] = {
         "enabled": True,
-        "phishtank_index": frozenset({normalize_url("http://some-other-phish.example.com/")}),
+        "providers": [PhishTankProvider(frozenset({normalize_url("http://some-other-phish.example.com/")}))],
     }
     fv = _fake_feature_vector("https://example.com", _LEGIT_RAW_FEATURES)
 
@@ -289,7 +290,7 @@ def test_prefilter_disabled_falls_through_to_model(app, client, _restore_threat_
     bad_url = "http://phish-prefilter-test.example.com/login"
     app.extensions["argus"]["threat_intel"] = {
         "enabled": False,
-        "phishtank_index": frozenset({normalize_url(bad_url)}),
+        "providers": [PhishTankProvider(frozenset({normalize_url(bad_url)}))],
     }
     fv = _fake_feature_vector(bad_url, _LEGIT_RAW_FEATURES)
 

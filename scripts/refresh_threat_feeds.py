@@ -8,8 +8,12 @@ existing PhishTank pre-filter loaders already expect
 normalized URL, and writes a dated snapshot CSV plus an
 ``active_snapshot.txt`` pointer into ``feeds_dir``. The running API picks up
 the new snapshot on its *next* start (see
-``src/api/app.py::_resolve_threat_feed_snapshot``) — this script does not
-hot-reload a live process.
+``src/api/app.py::_resolve_threat_feed_snapshot``), or immediately via a live
+``SIGHUP`` reload (Phase 5, F7 — see ``src/api/app.py::reload_threat_intel``
+and ``configs/threat_intel_config.yaml``'s header comment) — this script
+itself only writes the new snapshot; it does not send the signal, so pair it
+with ``kill -HUP <pid>`` (or your process manager's reload hook) if you don't
+want to wait for the next restart.
 
 A single feed failing (network error, schema drift) never aborts the
 refresh; it's logged and skipped, and every other feed still contributes.
@@ -34,9 +38,9 @@ from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import yaml  # noqa: E402
+import yaml
 
-from src.data.loaders import normalize_url  # noqa: E402
+from src.data.loaders import normalize_url
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger("refresh_threat_feeds")
@@ -79,7 +83,10 @@ def _normalize_openphish_text(raw: bytes) -> list[dict[str, str]]:
 
 
 def _normalize_urlhaus_text(raw: bytes) -> list[dict[str, str]]:
-    """URLhaus's ``csv_recent`` feed: id,dateadded,url,url_status,threat,tags,... (CSV, `#`-commented header)."""
+    """URLhaus's ``csv_recent`` feed: id,dateadded,url,url_status,threat,tags,...
+
+    (CSV, with a ``#``-commented header.)
+    """
     text = raw.decode("utf-8", errors="replace")
     lines = [ln for ln in text.splitlines() if ln and not ln.startswith("#")]
     reader = csv.reader(lines)

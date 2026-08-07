@@ -39,6 +39,7 @@ from src.api.auth.utils import (
     new_token_family_id,
     verify_password,
 )
+from src.api.route_utils import db_session, error
 
 logger = logging.getLogger(__name__)
 
@@ -72,16 +73,8 @@ class LogoutSchema(Schema):
     refresh_token = fields.Str(required=True)
 
 
-def _session():
-    return current_app.extensions["argus_auth"]["session_factory"]()
-
-
 def _secret_key() -> str:
     return current_app.extensions["argus_auth"]["secret_key"]
-
-
-def _error(message: str, status: int):
-    return jsonify(error=message), status
 
 
 def _issue_token_pair(session, user: User, family_id: str) -> dict:
@@ -121,9 +114,9 @@ def signup():
     try:
         data = SignupSchema().load(body)
     except ValidationError as exc:
-        return _error(f"invalid request: {exc.messages}", 400)
+        return error(f"invalid request: {exc.messages}", 400)
 
-    session = _session()
+    session = db_session()
     try:
         existing = session.scalar(select(User).where(User.email == data["email"]))
 
@@ -197,14 +190,14 @@ def verify_otp():
     try:
         data = VerifyOtpSchema().load(body)
     except ValidationError as exc:
-        return _error(f"invalid request: {exc.messages}", 400)
+        return error(f"invalid request: {exc.messages}", 400)
 
-    session = _session()
+    session = db_session()
     try:
         user = session.scalar(select(User).where(User.email == data["email"]))
         if user is None:
             logger.info("OTP verification attempted for unknown email")
-            return _error(_GENERIC_OTP_ERROR, 400)
+            return error(_GENERIC_OTP_ERROR, 400)
 
         otp = session.scalar(
             select(Otp)
@@ -215,11 +208,11 @@ def verify_otp():
 
         if otp is None or as_aware_utc(otp.expires_at) < now:
             logger.info("OTP verification failed for user_id=%s: no active code", user.id)
-            return _error(_GENERIC_OTP_ERROR, 400)
+            return error(_GENERIC_OTP_ERROR, 400)
 
         if otp.locked_until is not None and as_aware_utc(otp.locked_until) > now:
             logger.info("OTP verification blocked for user_id=%s: locked out", user.id)
-            return _error(_GENERIC_OTP_ERROR, 429)
+            return error(_GENERIC_OTP_ERROR, 429)
 
         if otp.code_hash != hash_otp(data["otp"], _secret_key()):
             otp.attempts += 1
@@ -235,7 +228,7 @@ def verify_otp():
                     user.id, otp.attempts, OTP_MAX_ATTEMPTS,
                 )
             session.commit()
-            return _error(_GENERIC_OTP_ERROR, 400)
+            return error(_GENERIC_OTP_ERROR, 400)
 
         otp.consumed = True
         user.email_verified = True
@@ -252,9 +245,9 @@ def login():
     try:
         data = LoginSchema().load(body)
     except ValidationError as exc:
-        return _error(f"invalid request: {exc.messages}", 400)
+        return error(f"invalid request: {exc.messages}", 400)
 
-    session = _session()
+    session = db_session()
     try:
         user = session.scalar(select(User).where(User.email == data["email"]))
 
@@ -262,13 +255,13 @@ def login():
             # Run a real Argon2 verify against a dummy hash so response
             # timing doesn't reveal whether the account exists.
             verify_password(dummy_password_hash(), data["password"])
-            return _error(_GENERIC_LOGIN_ERROR, 401)
+            return error(_GENERIC_LOGIN_ERROR, 401)
 
         if not verify_password(user.password_hash, data["password"]):
-            return _error(_GENERIC_LOGIN_ERROR, 401)
+            return error(_GENERIC_LOGIN_ERROR, 401)
 
         if not user.email_verified:
-            return _error(_GENERIC_LOGIN_ERROR, 401)
+            return error(_GENERIC_LOGIN_ERROR, 401)
 
         tokens = _issue_token_pair(session, user, new_token_family_id())
         session.commit()
@@ -284,15 +277,15 @@ def refresh():
     try:
         data = RefreshSchema().load(body)
     except ValidationError as exc:
-        return _error(f"invalid request: {exc.messages}", 400)
+        return error(f"invalid request: {exc.messages}", 400)
 
-    session = _session()
+    session = db_session()
     try:
         token_hash = hash_token(data["refresh_token"])
         token_row = session.scalar(select(RefreshToken).where(RefreshToken.token_hash == token_hash))
 
         if token_row is None:
-            return _error("invalid refresh token", 401)
+            return error("invalid refresh token", 401)
 
         now = datetime.now(timezone.utc)
         expires_at = as_aware_utc(token_row.expires_at)
@@ -310,14 +303,14 @@ def refresh():
                 "Refresh token reuse detected for user_id=%s — revoked family %s",
                 token_row.user_id, token_row.family_id,
             )
-            return _error("refresh token reuse detected — all sessions revoked", 401)
+            return error("refresh token reuse detected — all sessions revoked", 401)
 
         if expires_at < now:
-            return _error("refresh token expired", 401)
+            return error("refresh token expired", 401)
 
         user = session.get(User, token_row.user_id)
         if user is None:
-            return _error("invalid refresh token", 401)
+            return error("invalid refresh token", 401)
 
         token_row.is_used = True
         tokens = _issue_token_pair(session, user, token_row.family_id)
@@ -333,9 +326,9 @@ def logout():
     try:
         data = LogoutSchema().load(body)
     except ValidationError as exc:
-        return _error(f"invalid request: {exc.messages}", 400)
+        return error(f"invalid request: {exc.messages}", 400)
 
-    session = _session()
+    session = db_session()
     try:
         token_hash = hash_token(data["refresh_token"])
         token_row = session.scalar(select(RefreshToken).where(RefreshToken.token_hash == token_hash))

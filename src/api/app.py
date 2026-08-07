@@ -13,6 +13,9 @@ from __future__ import annotations
 import concurrent.futures
 import json
 import logging
+import os
+import signal
+import threading
 from pathlib import Path
 from typing import Any, Optional
 
@@ -34,6 +37,7 @@ from src.api.health import health_bp
 from src.api.public.routes import public_bp
 from src.api.scan.routes import scan_bp
 from src.api.threat_intel.phishtank import load_phishtank_hostname_index, load_phishtank_index
+from src.api.threat_intel.providers import build_providers
 from src.api.vault.routes import vault_bp
 from src.api.webapp_routes import webapp_bp
 from src.detection.brand_reference import load_brand_index
@@ -57,7 +61,7 @@ def _load_config(path: Path) -> dict[str, Any]:
 
 
 def _load_threat_intel(config_path: Path) -> dict[str, Any]:
-    """Build the threat-intel pre-filter state (DEC-010).
+    """Build the threat-intel pre-filter state (DEC-010; provider abstraction DEC-035).
 
     Backward compatible by design: a deployment without
     ``threat_intel_config.yaml`` (or with ``enabled: false``) gets an
@@ -69,12 +73,18 @@ def _load_threat_intel(config_path: Path) -> dict[str, Any]:
 
     Returns:
         ``{"enabled": bool, "phishtank_index": frozenset[str],
-        "phishtank_hostname_index": frozenset[str]}``.
+        "phishtank_hostname_index": frozenset[str],
+        "providers": list[ThreatIntelProvider]}``. ``check_prefilter``
+        (called from ``/detect``, ``/scan``, and the ``/v1`` blueprint) only
+        reads ``providers`` — the two frozensets are kept in the returned
+        dict for introspection/tests, not because any request path reads
+        them directly anymore.
     """
     empty_state = {
         "enabled": False,
         "phishtank_index": frozenset(),
         "phishtank_hostname_index": frozenset(),
+        "providers": [],
     }
     if not config_path.is_file():
         logger.info("No threat_intel_config.yaml found at %s — pre-filter disabled.", config_path)
@@ -88,11 +98,59 @@ def _load_threat_intel(config_path: Path) -> dict[str, Any]:
     subdomain_platforms = frozenset(
         p.lower() for p in config.get("subdomain_per_tenant_platforms", [])
     )
+    phishtank_index = load_phishtank_index(snapshot_path)
+    phishtank_hostname_index = load_phishtank_hostname_index(snapshot_path, subdomain_platforms)
     return {
         "enabled": True,
-        "phishtank_index": load_phishtank_index(snapshot_path),
-        "phishtank_hostname_index": load_phishtank_hostname_index(snapshot_path, subdomain_platforms),
+        "phishtank_index": phishtank_index,
+        "phishtank_hostname_index": phishtank_hostname_index,
+        "providers": build_providers(
+            config, phishtank_index, phishtank_hostname_index, gsb_api_key=os.environ.get("GSB_API_KEY")
+        ),
     }
+
+
+def reload_threat_intel(app: Flask, config_path: Path) -> None:
+    """Rebuild the threat-intel pre-filter state in place, without a restart (Phase 5, F7).
+
+    Previously, picking up a snapshot ``scripts/refresh_threat_feeds.py``
+    (or a config edit like flipping ``gsb_enabled``) required restarting the
+    whole process, since ``app.extensions["argus"]["threat_intel"]`` was
+    only ever built once, at ``create_app()`` time. This does the same
+    build (:func:`_load_threat_intel`) again and swaps the result in with a
+    single dict-item assignment, which is atomic under the GIL: any request
+    concurrently reading ``app.extensions["argus"]["threat_intel"]`` sees
+    either the fully-old or the fully-new dict, never a half-built one —
+    same "build it all first, then swap" discipline
+    ``scripts/refresh_threat_feeds.py`` already uses for its own
+    ``active_snapshot.txt`` pointer file.
+
+    Wired to ``SIGHUP`` in :func:`create_app` (the standard Unix
+    "reload config, don't restart the process" signal — the same one
+    nginx/gunicorn use for exactly this) rather than a new authenticated
+    HTTP endpoint, so this needed no new auth surface. Exposed as a plain
+    function (not only reachable via the signal) so it's directly callable
+    from tests and from an operator's own tooling.
+
+    Args:
+        app: The running Flask app whose ``threat_intel`` state to replace.
+        config_path: Path to ``threat_intel_config.yaml`` — the same path
+            originally passed to ``create_app()``.
+    """
+    logger.info("Reloading threat-intel pre-filter from %s...", config_path)
+    try:
+        new_state = _load_threat_intel(config_path)
+    except Exception as exc:  # noqa: BLE001 - a bad reload must never crash a running process
+        logger.error(
+            "Threat-intel reload failed (%s) — keeping the previous, still-serving state.", exc
+        )
+        return
+    app.extensions["argus"]["threat_intel"] = new_state
+    logger.info(
+        "Threat-intel pre-filter reloaded: enabled=%s, %d provider(s).",
+        new_state["enabled"],
+        len(new_state["providers"]),
+    )
 
 
 def _resolve_threat_feed_snapshot(config: dict[str, Any]) -> Path:
@@ -176,7 +234,9 @@ def _connect_redis_or_fail(storage_uri: str) -> Optional[Any]:
     )
     try:
         client.ping()
-    except Exception as exc:  # noqa: BLE001 - re-raised deliberately below
+    # Broad on purpose: re-raised as a RuntimeError immediately below, so
+    # this catches connection refusals, timeouts and auth errors alike.
+    except Exception as exc:
         raise RuntimeError(
             f"rate_limit_storage_uri is set to {storage_uri!r} but Redis is unreachable "
             f"({exc}) -- refusing to start rather than silently running with unenforced "
@@ -338,9 +398,18 @@ def create_app(
         max_workers=api_config.get("enrichment_max_workers", 8)
     )
 
-    threat_intel = _load_threat_intel(
+    # F19: a *separate* pool for async scan jobs (POST /v1/scan/async) --
+    # deliberately not the enrichment pool above. Async job submissions and
+    # synchronous /v1/scan enrichment work would otherwise contend for the
+    # same bounded set of workers, letting a burst of one starve the other.
+    job_executor = concurrent.futures.ThreadPoolExecutor(
+        max_workers=api_config.get("async_job_max_workers", 4)
+    )
+
+    resolved_threat_intel_config_path = (
         Path(threat_intel_config_path) if threat_intel_config_path else _DEFAULT_THREAT_INTEL_CONFIG_PATH
     )
+    threat_intel = _load_threat_intel(resolved_threat_intel_config_path)
 
     detection = _load_detection(
         Path(detection_config_path) if detection_config_path else _DEFAULT_DETECTION_CONFIG_PATH
@@ -362,10 +431,25 @@ def create_app(
         "model_type": model_type,
         "threshold": model_config.get("threshold", 0.5),
         "executor": executor,
+        "job_executor": job_executor,
         "config": api_config,
         "threat_intel": threat_intel,
         "detection": detection,
     }
+
+    # Phase 5 (F7): SIGHUP triggers an in-place threat-intel reload -- no
+    # restart needed to pick up a fresh `scripts/refresh_threat_feeds.py`
+    # snapshot or a `gsb_enabled`/`GSB_API_KEY` change. Standard Unix
+    # "reload config" convention (nginx/gunicorn use the same signal for
+    # the same reason), so no new auth surface was needed. signal.signal()
+    # only works from the interpreter's main thread -- guarded rather than
+    # asserted, since create_app() is also called from test fixtures/worker
+    # threads where registering a handler isn't meaningful anyway.
+    if threading.current_thread() is threading.main_thread():
+        signal.signal(
+            signal.SIGHUP,
+            lambda signum, frame: reload_threat_intel(app, resolved_threat_intel_config_path),
+        )
 
     app.register_blueprint(health_bp)
     app.register_blueprint(detect_bp)
@@ -442,7 +526,11 @@ def create_app(
     # dedicated cap -- a stolen access token shouldn't be able to mint an
     # unbounded number of API keys.
     api_key_mgmt_limit = api_config.get("api_key_mgmt_rate_limit", "20 per minute")
-    for endpoint in ("auth_api_keys.create_api_key", "auth_api_keys.list_api_keys", "auth_api_keys.revoke_api_key"):
+    for endpoint in (
+        "auth_api_keys.create_api_key",
+        "auth_api_keys.list_api_keys",
+        "auth_api_keys.revoke_api_key",
+    ):
         app.view_functions[endpoint] = limiter.limit(api_key_mgmt_limit)(app.view_functions[endpoint])
 
     # Phase 2 (C3): /v1/* endpoints are limited per-API-key (not per-IP) --
