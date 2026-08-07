@@ -52,3 +52,53 @@ button {
   font-size: 0.85rem;
   margin-top: 0.75rem;
 }
+
+h2 {
+  font-size: 1rem;
+  margin-top: 1.5rem;
+}
+
+h3 {
+  font-size: 0.9rem;
+  margin-top: 1.25rem;
+}
+
+#protectionStatus {
+  font-size: 0.85rem;
+  color: #2952e3;
+  min-height: 1.2em;
+}
+
+.allowlist-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.allowlist-row input {
+  flex: 1;
+  padding: 0.4rem;
+}
+
+.allowlist-items,
+.override-log-items {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0;
+  font-size: 0.85rem;
+}
+
+.allowlist-items li,
+.override-log-items li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid #eee;
+}
+
+.allowlist-items button {
+  margin: 0;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.78rem;
+}

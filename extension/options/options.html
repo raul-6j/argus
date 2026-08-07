@@ -38,6 +38,46 @@
     <p id="status" role="status"></p>
 
     <hr />
+
+    <h2>Active Protection Mode (opt-in)</h2>
+    <p class="hint">
+      When enabled, ARGUS checks every site you navigate to (hostname only,
+      same privacy floor as the popup's passive check) <em>before</em> the
+      page loads, and warns you if it's flagged. This requires the browser's
+      <code>webNavigation</code> permission plus access to all http/https
+      sites, which Chrome will prompt you to grant. Manifest V3 doesn't allow
+      extensions to truly block a navigation, so on a fast-loading page the
+      original content may flash briefly before the warning replaces it —
+      a browser platform limitation, not a bug.
+    </p>
+    <label class="checkbox-row">
+      <input id="activeProtectionEnabled" type="checkbox" />
+      Enable Active Protection Mode
+    </label>
+    <p id="protectionStatus" role="status"></p>
+
+    <h3>Allowlist</h3>
+    <p class="hint">Sites here are never checked or warned about.</p>
+    <div class="allowlist-row">
+      <input id="allowlistInput" type="text" placeholder="example.com" spellcheck="false" />
+      <button id="addAllowlistBtn" type="button">Add</button>
+    </div>
+    <ul id="allowlistItems" class="allowlist-items"></ul>
+
+    <h3>Recent "Continue Anyway" overrides</h3>
+    <p class="hint">
+      Recorded locally on this device only — never sent to ARGUS or anyone
+      else.
+    </p>
+    <ul id="overrideLogItems" class="override-log-items"></ul>
+    <button id="clearOverrideLogBtn" type="button">Clear log</button>
+
+    <hr />
+    <p>
+      <button id="scanQrBtn" type="button">Scan a QR Code</button>
+    </p>
+
+    <hr />
     <p>
       <a id="accountLink" href="../account/account.html" target="_blank" rel="noopener">
         Sign up / Log in (cross-device sync, Phase 8)

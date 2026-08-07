@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ARGUS — Warning</title>
+  <link rel="stylesheet" href="interstitial.css" />
+</head>
+<body>
+  <main>
+    <section id="loadingState" class="state">Loading warning details...</section>
+
+    <section id="missingState" class="state hidden">
+      <h1>⚠ Warning details unavailable</h1>
+      <p>
+        This warning's details are no longer available (the browser may have
+        restarted, or this page was opened directly). You can still navigate
+        away safely.
+      </p>
+      <button id="goBackMissing" type="button">Go Back</button>
+    </section>
+
+    <section id="warningState" class="state hidden">
+      <header>
+        <span class="shield">🛡️</span>
+        <h1>ARGUS blocked a potentially dangerous site</h1>
+      </header>
+
+      <p class="hostname" id="hostname"></p>
+      <p class="summary">
+        <span id="verdictBadge" class="verdict-badge"></span>
+        <span id="confidence" class="confidence"></span>
+      </p>
+      <p class="source-note" id="sourceNote"></p>
+
+      <div class="button-row primary-row">
+        <button id="goBackBtn" type="button" class="primary">Go Back to Safety</button>
+        <button id="viewTechnicalBtn" type="button" class="secondary">View Technical Analysis</button>
+      </div>
+
+      <section id="technicalPanel" class="technical-panel hidden">
+        <p class="hint">
+          Running a Deep Scan sends the <strong>full URL</strong> (not just
+          the hostname) to ARGUS's API for a richer, page-content-aware
+          analysis (brand impersonation, credential harvesting, hosting
+          platform risk, and more).
+        </p>
+        <label class="checkbox-row">
+          <input id="deepScanConsent" type="checkbox" />
+          I understand the full URL will be sent for a deeper analysis
+        </label>
+        <button id="runDeepScanBtn" type="button" disabled>Run Deep Scan</button>
+        <div id="deepScanResult" class="deep-scan-result hidden">
+          <span id="riskBandBadge" class="risk-band-badge"></span>
+          <div id="signalsPanel" class="signals-panel"></div>
+          <p id="plainExplanation" class="plain-explanation"></p>
+        </div>
+        <p id="deepScanError" class="error-text hidden"></p>
+      </section>
+
+      <section class="danger-zone">
+        <h2>Continue anyway</h2>
+        <p class="hint">
+          Only continue if you're confident this warning is wrong. This
+          choice is recorded locally on your device (never sent to ARGUS)
+          so you can review it later in the extension's settings.
+        </p>
+        <label class="checkbox-row">
+          <input id="understandRisk" type="checkbox" />
+          I understand the risks of visiting this site
+        </label>
+        <label class="checkbox-row">
+          <input id="alsoAllowlist" type="checkbox" />
+          Don't warn me about this site again
+        </label>
+        <div class="button-row">
+          <button id="continueBtn" type="button" class="danger" disabled>Continue Anyway</button>
+          <button id="allowlistOnlyBtn" type="button" class="secondary">
+            Add to allowlist without continuing
+          </button>
+        </div>
+        <p id="continueStatus" class="status-text"></p>
+      </section>
+    </section>
+  </main>
+  <script type="module" src="interstitial.js"></script>
+</body>
+</html>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isHttpUrl, originPatternFor, toHostnameOnly } from "../lib/urlUtils.js";
+import { hostnameOf, isHttpUrl, originPatternFor, toHostnameOnly } from "../lib/urlUtils.js";
 
 describe("toHostnameOnly", () => {
   it("drops path, query, and fragment", () => {
@@ -34,6 +34,20 @@ describe("isHttpUrl", () => {
     expect(isHttpUrl("javascript:alert(1)")).toBe(false);
     expect(isHttpUrl("not a url")).toBe(false);
     expect(isHttpUrl("")).toBe(false);
+  });
+});
+
+describe("hostnameOf", () => {
+  it("extracts the bare hostname, no scheme or port", () => {
+    expect(hostnameOf("https://example.com:8443/path?x=1")).toBe("example.com");
+  });
+
+  it("lowercases the hostname", () => {
+    expect(hostnameOf("https://Example.COM")).toBe("example.com");
+  });
+
+  it("returns an empty string for an unparseable URL", () => {
+    expect(hostnameOf("not a url")).toBe("");
   });
 });
 

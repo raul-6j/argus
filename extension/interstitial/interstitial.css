@@ -1,0 +1,192 @@
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  max-width: 640px;
+  margin: 3rem auto;
+  padding: 0 1.5rem 3rem;
+  color: #1a1a1a;
+  background: #fff8f6;
+}
+
+.hidden {
+  display: none !important;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.shield {
+  font-size: 2rem;
+}
+
+h1 {
+  font-size: 1.3rem;
+  margin: 0;
+  color: #c62828;
+}
+
+h2 {
+  font-size: 1rem;
+  margin: 0 0 0.4rem;
+}
+
+.hostname {
+  font-size: 1.05rem;
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.summary {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.5rem 0;
+}
+
+.verdict-badge {
+  display: inline-flex;
+  font-weight: 700;
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+  background: #fdecea;
+  color: #c62828;
+}
+
+.confidence {
+  color: #555;
+  font-size: 0.9rem;
+}
+
+.source-note {
+  font-size: 0.82rem;
+  color: #666;
+  margin: 0 0 1.5rem;
+}
+
+.button-row {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin: 0.75rem 0;
+}
+
+button {
+  padding: 0.6rem 1.2rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+button.primary {
+  background: #2952e3;
+  color: white;
+}
+
+button.secondary {
+  background: #eef0f3;
+  color: #1a1a1a;
+}
+
+button.danger {
+  background: #fdecea;
+  color: #c62828;
+  border: 1px solid #f3b7b1;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.technical-panel {
+  margin: 1.25rem 0;
+  padding: 1rem;
+  border: 1px solid #e2e4e9;
+  border-radius: 10px;
+  background: white;
+}
+
+.hint {
+  font-size: 0.85rem;
+  color: #555;
+  line-height: 1.4;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+  margin: 0.5rem 0;
+}
+
+.checkbox-row input {
+  margin: 0;
+}
+
+.deep-scan-result {
+  margin-top: 0.75rem;
+  border-top: 1px solid #eee;
+  padding-top: 0.75rem;
+}
+
+.risk-band-badge {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  background: #fdecea;
+  color: #c62828;
+}
+
+.signals-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.6rem 0;
+}
+
+.signal-badge {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: #f0f0f0;
+  color: #333;
+}
+
+.signal-badge.phishing {
+  background: #fdecea;
+  color: #c62828;
+}
+
+.plain-explanation {
+  font-size: 0.85rem;
+  line-height: 1.4;
+  margin: 0.3rem 0 0;
+}
+
+.error-text {
+  color: #c62828;
+  font-size: 0.85rem;
+}
+
+.danger-zone {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  border: 1px dashed #d8d8d8;
+  border-radius: 10px;
+}
+
+.status-text {
+  font-size: 0.85rem;
+  color: #555;
+  min-height: 1.2em;
+}

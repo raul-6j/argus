@@ -1,13 +1,17 @@
+import "../lib/browserCompat.js";
+
 const loadingEl = document.getElementById("loading");
 const resultEl = document.getElementById("result");
 const errorEl = document.getElementById("errorState");
 const hostnameEl = document.getElementById("hostname");
 const verdictEl = document.getElementById("verdict");
+const riskBandEl = document.getElementById("riskBand");
 const confidenceEl = document.getElementById("confidence");
 const whyBtn = document.getElementById("whyBtn");
 const shapPanel = document.getElementById("shapPanel");
 const errorMessageEl = document.getElementById("errorMessage");
 const openOptionsBtn = document.getElementById("openOptions");
+const scanQrBtn = document.getElementById("scanQrBtn");
 const deepScanBtn = document.getElementById("deepScanBtn");
 const deepScanConsent = document.getElementById("deepScanConsent");
 const deepScanFullUrlCheckbox = document.getElementById("deepScanFullUrl");
@@ -26,20 +30,40 @@ function renderResult(result) {
   verdictEl.textContent = result.label === "phishing" ? "⚠ Phishing" : "✓ Legitimate";
   verdictEl.className = `verdict ${result.label}`;
   confidenceEl.textContent = `Confidence: ${(result.confidence * 100).toFixed(1)}%`;
+  // The quick (non-deep-scan) check uses /detect's fast, hostname-only path,
+  // which never returns risk_score/risk_band (see docs/DECISIONS.md DEC-A) --
+  // only a Deep Scan (renderDeepScanResult) has a risk band to show.
+  riskBandEl.classList.add("hidden");
   showState("result");
 }
+
+const _RISK_BAND_LABELS = {
+  low: "Low Risk",
+  caution: "Caution",
+  suspicious: "Suspicious",
+  high: "High Risk",
+  critical: "Critical",
+};
 
 /**
  * Render a deep-scan result's detection signals (Phase 1, DEC-A) as
  * labeled badges, plus its plain-language explanation. Updates the verdict/
  * confidence in place if the fusion layer's decision differs from the
  * quick check's model-only decision.
- * @param {{label: string, confidence: number, risk_score?: number, signals?: Array<{name: string, triggered: boolean, direction: string, evidence: object}>}} result
+ * @param {{label: string, confidence: number, risk_score?: number, risk_band?: string, signals?: Array<{name: string, triggered: boolean, direction: string, evidence: object}>}} result
  */
 function renderDeepScanResult(result) {
   verdictEl.textContent = result.label === "phishing" ? "⚠ Phishing" : "✓ Legitimate";
   verdictEl.className = `verdict ${result.label}`;
   confidenceEl.textContent = `Confidence: ${(result.confidence * 100).toFixed(1)}%`;
+
+  if (result.risk_band) {
+    riskBandEl.textContent = _RISK_BAND_LABELS[result.risk_band] || result.risk_band;
+    riskBandEl.className = `risk-band-badge ${result.risk_band}`;
+    riskBandEl.classList.remove("hidden");
+  } else {
+    riskBandEl.classList.add("hidden");
+  }
 
   signalsPanel.innerHTML = "";
   const triggered = (result.signals || []).filter((s) => s.triggered);
@@ -79,6 +103,12 @@ function signalLabel(signal) {
       return "Suspicious certificate";
     case "redirect_chain":
       return brand ? `Redirects to a ${brand} look-alike` : "Suspicious redirect";
+    case "credential_context":
+      return "Requests sensitive data suspiciously";
+    case "platform_risk":
+      return "Hosted on a free/shared platform with other risk signals";
+    case "semantic_content":
+      return "Page wording uses social-engineering pressure tactics";
     default:
       return signal.name;
   }
@@ -193,4 +223,7 @@ async function init() {
 }
 
 openOptionsBtn.addEventListener("click", () => chrome.runtime.openOptionsPage());
+scanQrBtn.addEventListener("click", () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL("qrscan/qrscan.html") });
+});
 document.addEventListener("DOMContentLoaded", init);

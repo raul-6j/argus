@@ -30,8 +30,11 @@ h1 {
   white-space: nowrap;
 }
 
+/* !important is deliberate: .hidden must always win over any other class's
+   display value on the same element (e.g. .deep-scan-consent/.signals-panel's
+   display: flex, both declared later in this file), regardless of order. */
 .hidden {
-  display: none;
+  display: none !important;
 }
 
 .verdict {
@@ -53,6 +56,23 @@ h1 {
   color: #444;
   margin-bottom: 0.75rem;
 }
+
+.risk-band-badge {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  margin-bottom: 0.4rem;
+}
+
+.risk-band-badge.low { background: #e8f5e9; color: #2e7d32; }
+.risk-band-badge.caution { background: #f5f6d8; color: #9aa000; }
+.risk-band-badge.suspicious { background: #fdf0dc; color: #b06a00; }
+.risk-band-badge.high { background: #fbe4d8; color: #c1440e; }
+.risk-band-badge.critical { background: #fdecea; color: #c62828; }
 
 button {
   padding: 0.4rem 0.9rem;

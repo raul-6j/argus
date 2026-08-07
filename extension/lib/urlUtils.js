@@ -18,6 +18,21 @@ export function toHostnameOnly(url) {
 }
 
 /**
+ * Extract the bare hostname (no scheme, no port) from a URL -- used for
+ * allowlist matching (Phase 3, F8), which should match "example.com"
+ * regardless of http vs https or an explicit port.
+ * @param {string} url - A full URL.
+ * @returns {string} The lowercase hostname, or "" if unparseable.
+ */
+export function hostnameOf(url) {
+  try {
+    return new URL(url).hostname.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+/**
  * Whether a string is a well-formed http(s) URL.
  * @param {string} url
  * @returns {boolean}

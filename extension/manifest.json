@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "ARGUS Phishing Detector",
   "version": "0.1.0",
-  "description": "Real-time phishing detection against the ARGUS ML API. Checks the current page only when you open the popup (no automatic per-navigation scanning); sends the hostname only by default.",
+  "description": "Real-time phishing detection against the ARGUS ML API. Checks the current page when you open the popup; sends the hostname only by default. Optional opt-in Active Protection mode warns before navigating to a flagged site.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqpWLfB2dGpT6sHIc+L5RwtlkfQaoA0IKyyjcG+Z23Io7FgJeWkjvCC/OSIbQwczpvA78EjOtDDiXaGe2dbBgyZRr8KN1gM40WVmjsPpAFh2yEgDbTKie1beHsF6dHiQMw6TZo1vdhjp/QQZ2kCMexP0zGyTYH0PRhD8+YVq1PFaUlZ0q6nvWi9OLgRINnUr8ug1o2xxIK3+myCOgzS9POO9RrGyBw34Oc4R8RVdp5nd/jh6IxtmzA21/7vL5eFHkKCocePR/9xPe/U89GVbOTI5PSOO5znms4sFrbL/twRvhcGcXimraYo8CoyQd4ATYHgUfNMdhDx4fowRLvaRvTwIDAQAB",
   "action": {
     "default_popup": "popup/popup.html"
@@ -10,9 +10,20 @@
   "options_page": "options/options.html",
   "background": {
     "service_worker": "background.js",
+    "scripts": ["background.js"],
     "type": "module"
   },
-  "permissions": ["storage", "activeTab"],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "argus-phishing-detector@argus-project.dev",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
+    }
+  },
+  "permissions": ["storage", "activeTab", "contextMenus"],
+  "optional_permissions": ["webNavigation"],
   "optional_host_permissions": ["http://*/*", "https://*/*"],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'none';"
