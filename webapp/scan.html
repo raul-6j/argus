@@ -16,6 +16,12 @@
 
     <div id="errorBox" class="error-box hidden"></div>
     <div id="reportCard" class="card hidden"></div>
+    <div id="exportRow" class="export-row hidden">
+      Export:
+      <a id="exportJson" href="#">JSON</a>
+      <a id="exportCsv" href="#">CSV</a>
+      <a id="exportPdf" href="#">PDF</a>
+    </div>
 
     <p class="disclosure"><a href="index.html">Scan another URL →</a></p>
 
@@ -45,6 +51,13 @@
         }
         loadingMsg.textContent = "Shared scan report:";
         renderReportCard(reportCard, body);
+
+        const exportRow = document.getElementById("exportRow");
+        const base = `/scan/${encodeURIComponent(scanId)}/export`;
+        document.getElementById("exportJson").href = `${base}?format=json`;
+        document.getElementById("exportCsv").href = `${base}?format=csv`;
+        document.getElementById("exportPdf").href = `${base}?format=pdf`;
+        exportRow.classList.remove("hidden");
       } catch (err) {
         loadingMsg.textContent = "";
         showError(errorBox, err.message);

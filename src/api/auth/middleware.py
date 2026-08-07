@@ -1,8 +1,13 @@
-"""``@require_auth`` decorator (Phase 8, Task 8.1).
+"""``@require_auth`` / ``@optional_auth`` decorators (Phase 8, Task 8.1; Phase 4, F11).
 
 Reads ``Authorization: Bearer <jwt>`` from the request, decodes it with the
 app's SECRET_KEY, and attaches the authenticated user ID to ``flask.g``.
-Every view wrapped with this decorator can read ``g.user_id``.
+Every view wrapped with ``@require_auth`` can read ``g.user_id``.
+
+``@optional_auth`` is the same decode logic used by an endpoint that must
+stay usable by anonymous callers (e.g. the public webapp's ``POST /scan``) but
+opportunistically attaches identity when a valid token is presented, instead
+of rejecting the request outright.
 """
 
 from __future__ import annotations
@@ -38,6 +43,31 @@ def require_auth(view):
             return jsonify(error="invalid access token"), 401
 
         g.user_id = int(payload["sub"])
+        return view(*args, **kwargs)
+
+    return wrapped
+
+
+def optional_auth(view):
+    """Attach ``flask.g.user_id`` if a valid bearer token is present.
+
+    Unlike :func:`require_auth`, a missing, malformed, expired, or invalid
+    token never short-circuits the request — ``g.user_id`` is simply left
+    ``None`` and the view runs as if the caller were anonymous.
+    """
+
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        g.user_id = None
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header[len("Bearer ") :].strip()
+            secret_key = current_app.extensions["argus_auth"]["secret_key"]
+            try:
+                payload = decode_access_token(token, secret_key)
+                g.user_id = int(payload["sub"])
+            except jwt.PyJWTError:
+                pass
         return view(*args, **kwargs)
 
     return wrapped

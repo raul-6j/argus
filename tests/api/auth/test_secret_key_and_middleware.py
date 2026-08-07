@@ -11,15 +11,15 @@ from src.api.auth.utils import get_secret_key
 
 
 def test_s6_get_secret_key_raises_when_unset():
-    with mock.patch.dict(os.environ, {}, clear=True):
-        with pytest.raises(RuntimeError, match="SECRET_KEY"):
-            get_secret_key()
+    with mock.patch.dict(os.environ, {}, clear=True), pytest.raises(RuntimeError, match="SECRET_KEY"):
+        get_secret_key()
 
 
 def test_s6_get_secret_key_raises_when_empty_string():
-    with mock.patch.dict(os.environ, {"SECRET_KEY": ""}, clear=True):
-        with pytest.raises(RuntimeError, match="SECRET_KEY"):
-            get_secret_key()
+    with mock.patch.dict(os.environ, {"SECRET_KEY": ""}, clear=True), pytest.raises(
+        RuntimeError, match="SECRET_KEY"
+    ):
+        get_secret_key()
 
 
 def test_s6_create_app_fails_closed_without_secret_key(tmp_path):
@@ -33,9 +33,8 @@ def test_s6_create_app_fails_closed_without_secret_key(tmp_path):
     config_path = tmp_path / "api_config.yaml"
     config_path.write_text(yaml.safe_dump(api_config))
 
-    with mock.patch.dict(os.environ, {}, clear=True):
-        with pytest.raises(RuntimeError, match="SECRET_KEY"):
-            create_app(config_path=str(config_path))
+    with mock.patch.dict(os.environ, {}, clear=True), pytest.raises(RuntimeError, match="SECRET_KEY"):
+        create_app(config_path=str(config_path))
 
 
 def test_require_auth_rejects_missing_header(client):
@@ -69,3 +68,54 @@ def test_require_auth_accepts_valid_token(client):
 
     resp = client.get("/vault", headers={"Authorization": f"Bearer {tokens['access_token']}"})
     assert resp.status_code == 200
+
+
+class TestOptionalAuth:
+    """``@optional_auth`` (Phase 4, F11) -- exercised via ``POST /scan``, the
+    only route that uses it. Unlike ``@require_auth``, none of these cases
+    should ever produce a 401 -- the view must always run."""
+
+    def test_missing_header_treated_as_anonymous(self, client):
+        resp = client.post("/scan", json={"url": "not a valid url"})
+        assert resp.status_code == 400  # rejected by URL validation, not auth
+        assert resp.status_code != 401
+
+    def test_malformed_header_treated_as_anonymous(self, client):
+        resp = client.post(
+            "/scan", json={"url": "not a valid url"}, headers={"Authorization": "NotBearer xyz"}
+        )
+        assert resp.status_code == 400
+        assert resp.status_code != 401
+
+    def test_garbage_token_treated_as_anonymous(self, client):
+        resp = client.post(
+            "/scan",
+            json={"url": "not a valid url"},
+            headers={"Authorization": "Bearer not-a-real-jwt"},
+        )
+        assert resp.status_code == 400
+        assert resp.status_code != 401
+
+    def test_valid_token_sets_g_user_id(self, app, client):
+        """Unit-test the decorator directly via a bare request context,
+        rather than through a specific route -- confirms g.user_id is set to
+        the real user id (not left None) when the token is valid."""
+        from flask import g
+
+        from src.api.auth.middleware import optional_auth
+
+        email, password = "optional_auth_test@example.com", "correct-horse-1"
+        otp = client.post("/auth/signup", json={"email": email, "password": password}).get_json()[
+            "dev_otp"
+        ]
+        client.post("/auth/verify-otp", json={"email": email, "otp": otp})
+        tokens = client.post("/auth/login", json={"email": email, "password": password}).get_json()
+
+        @optional_auth
+        def _view():
+            return g.user_id
+
+        with app.test_request_context(
+            headers={"Authorization": f"Bearer {tokens['access_token']}"}
+        ):
+            assert _view() is not None

@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ARGUS — Log In</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="brand">
+      <span class="mark">🛡️</span>
+      <h1>ARGUS</h1>
+    </header>
+    <nav class="site-nav">
+      <a href="index.html">Scan a URL</a>
+      <a href="login.html" class="active">Log in / Sign up</a>
+    </nav>
+
+    <div id="loginStep" class="card auth-card">
+      <h2>Log in</h2>
+      <form id="loginForm" class="auth-form">
+        <input id="loginEmail" type="email" placeholder="you@example.com" required autocomplete="email" />
+        <input id="loginPassword" type="password" placeholder="Password" required autocomplete="current-password" />
+        <button type="submit">Log in</button>
+      </form>
+      <p class="auth-switch">
+        Don't have an account? <a href="#" id="showSignup">Sign up</a>
+      </p>
+    </div>
+
+    <div id="signupStep" class="card auth-card hidden">
+      <h2>Sign up</h2>
+      <form id="signupForm" class="auth-form">
+        <input id="signupEmail" type="email" placeholder="you@example.com" required autocomplete="email" />
+        <input
+          id="signupPassword"
+          type="password"
+          placeholder="Password (min 8 characters)"
+          required
+          minlength="8"
+          autocomplete="new-password"
+        />
+        <button type="submit">Sign up</button>
+      </form>
+      <p class="auth-switch">
+        Already have an account? <a href="#" id="showLogin">Log in</a>
+      </p>
+    </div>
+
+    <div id="otpStep" class="card auth-card hidden">
+      <h2>Verify your email</h2>
+      <p class="tagline">Enter the 6-digit code sent to <span id="otpEmailLabel"></span>.</p>
+      <form id="otpForm" class="auth-form">
+        <input id="otpCode" type="text" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" required />
+        <button type="submit">Verify</button>
+      </form>
+      <p class="auth-switch dev-otp-hint" id="devOtpHint"></p>
+    </div>
+
+    <div id="errorBox" class="error-box hidden"></div>
+    <div id="successBox" class="success-box hidden"></div>
+
+    <footer>ARGUS — real-time phishing detection.</footer>
+  </div>
+
+  <script src="authClient.js"></script>
+  <script>
+    const loginStep = document.getElementById("loginStep");
+    const signupStep = document.getElementById("signupStep");
+    const otpStep = document.getElementById("otpStep");
+    const errorBox = document.getElementById("errorBox");
+    const successBox = document.getElementById("successBox");
+
+    function showStep(step) {
+      for (const el of [loginStep, signupStep, otpStep]) {
+        el.classList.toggle("hidden", el !== step);
+      }
+      errorBox.classList.add("hidden");
+      successBox.classList.add("hidden");
+    }
+
+    function showError(message) {
+      errorBox.textContent = message;
+      errorBox.classList.remove("hidden");
+      successBox.classList.add("hidden");
+    }
+
+    function showSuccess(message) {
+      successBox.textContent = message;
+      successBox.classList.remove("hidden");
+      errorBox.classList.add("hidden");
+    }
+
+    if (argusIsLoggedIn()) {
+      location.href = "dashboard.html";
+    }
+
+    document.getElementById("showSignup").addEventListener("click", (e) => {
+      e.preventDefault();
+      showStep(signupStep);
+    });
+    document.getElementById("showLogin").addEventListener("click", (e) => {
+      e.preventDefault();
+      showStep(loginStep);
+    });
+
+    document.getElementById("loginForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const email = document.getElementById("loginEmail").value;
+      const password = document.getElementById("loginPassword").value;
+      try {
+        await argusLogin(email, password);
+        location.href = "dashboard.html";
+      } catch (err) {
+        showError(err.message);
+      }
+    });
+
+    let pendingSignupEmail = "";
+
+    document.getElementById("signupForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const email = document.getElementById("signupEmail").value;
+      const password = document.getElementById("signupPassword").value;
+      try {
+        const resp = await argusSignup(email, password);
+        pendingSignupEmail = email;
+        document.getElementById("otpEmailLabel").textContent = email;
+        const devOtpHint = document.getElementById("devOtpHint");
+        if (resp.dev_otp) {
+          devOtpHint.textContent = `Dev mode: your code is ${resp.dev_otp}`;
+          devOtpHint.classList.remove("hidden");
+        } else {
+          devOtpHint.textContent = "";
+        }
+        showStep(otpStep);
+      } catch (err) {
+        showError(err.message);
+      }
+    });
+
+    document.getElementById("otpForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const otp = document.getElementById("otpCode").value;
+      try {
+        await argusVerifyOtp(pendingSignupEmail, otp);
+        showStep(loginStep);
+        showSuccess("Email verified — you can now log in.");
+      } catch (err) {
+        showError(err.message);
+      }
+    });
+  </script>
+</body>
+</html>

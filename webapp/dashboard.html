@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ARGUS — Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="brand">
+      <span class="mark">🛡️</span>
+      <h1>ARGUS</h1>
+    </header>
+    <nav class="site-nav">
+      <a href="index.html">Scan a URL</a>
+      <a href="dashboard.html" class="active">Dashboard</a>
+      <a href="#" id="logoutLink">Log out</a>
+    </nav>
+    <p class="tagline">Your scan history, risk distribution, and detection-source breakdown.</p>
+
+    <div id="errorBox" class="error-box hidden"></div>
+
+    <section class="card">
+      <h2>Risk band distribution</h2>
+      <div id="riskBandBreakdown"></div>
+    </section>
+
+    <section class="card">
+      <h2>Detection source breakdown</h2>
+      <div id="sourceBreakdown"></div>
+    </section>
+
+    <section class="card">
+      <h2>Recent scans</h2>
+      <div id="historyList"></div>
+    </section>
+
+    <footer>ARGUS — real-time phishing detection.</footer>
+  </div>
+
+  <script src="authClient.js"></script>
+  <script src="report.js"></script>
+  <script>
+    const errorBox = document.getElementById("errorBox");
+    const riskBandBreakdown = document.getElementById("riskBandBreakdown");
+    const sourceBreakdown = document.getElementById("sourceBreakdown");
+    const historyList = document.getElementById("historyList");
+
+    function showError(message) {
+      errorBox.textContent = message;
+      errorBox.classList.remove("hidden");
+    }
+
+    document.getElementById("logoutLink").addEventListener("click", async (event) => {
+      event.preventDefault();
+      await argusLogout();
+      location.href = "index.html";
+    });
+
+    async function downloadExport(path, format) {
+      try {
+        const token = await argusGetValidAccessToken();
+        const resp = await fetch(`${path}?format=${format}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!resp.ok) {
+          const body = await resp.json().catch(() => ({}));
+          throw new Error(body.error || `Export failed (HTTP ${resp.status})`);
+        }
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        const disposition = resp.headers.get("Content-Disposition") || "";
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        a.download = match ? match[1] : `argus-report.${format}`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+
+    async function init() {
+      if (!argusIsLoggedIn()) {
+        location.href = "login.html";
+        return;
+      }
+
+      let token;
+      try {
+        token = await argusGetValidAccessToken();
+      } catch (err) {
+        location.href = "login.html";
+        return;
+      }
+
+      try {
+        const resp = await fetch("/scan/history?limit=200", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const body = await resp.json();
+        if (!resp.ok) {
+          throw new Error(body.error || `Failed to load history (HTTP ${resp.status})`);
+        }
+
+        const scans = body.scans || [];
+
+        const riskCounts = {};
+        const sourceCounts = {};
+        for (const scan of scans) {
+          riskCounts[scan.risk_band] = (riskCounts[scan.risk_band] || 0) + 1;
+          sourceCounts[scan.source] = (sourceCounts[scan.source] || 0) + 1;
+        }
+        renderBarList(riskBandBreakdown, riskCounts, riskBandLabel);
+        renderBarList(sourceBreakdown, sourceCounts);
+
+        historyList.innerHTML = "";
+        if (scans.length === 0) {
+          const empty = document.createElement("p");
+          empty.className = "meta";
+          empty.textContent = "No scans yet — scan a URL while logged in to see it here.";
+          historyList.appendChild(empty);
+        }
+        for (const scan of scans) {
+          const row = renderHistoryRow(scan, (format) =>
+            downloadExport(`/scan/history/${scan.id}/export`, format)
+          );
+          historyList.appendChild(row);
+        }
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

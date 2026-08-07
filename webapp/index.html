@@ -12,6 +12,12 @@
       <span class="mark">🛡️</span>
       <h1>ARGUS</h1>
     </header>
+    <nav class="site-nav" id="siteNav">
+      <a href="index.html" class="active">Scan a URL</a>
+      <a href="login.html" id="navLogin">Log in / Sign up</a>
+      <a href="dashboard.html" id="navDashboard" class="hidden">Dashboard</a>
+      <a href="#" id="navLogout" class="hidden">Log out</a>
+    </nav>
     <p class="tagline">Paste a URL to check it for phishing — no account or extension required.</p>
 
     <form id="scanForm" class="scan-form">
@@ -29,6 +35,7 @@
     <footer>ARGUS — real-time phishing detection.</footer>
   </div>
 
+  <script src="authClient.js"></script>
   <script src="report.js"></script>
   <script>
     const form = document.getElementById("scanForm");
@@ -36,6 +43,20 @@
     const scanBtn = document.getElementById("scanBtn");
     const errorBox = document.getElementById("errorBox");
     const reportCard = document.getElementById("reportCard");
+    const navLogin = document.getElementById("navLogin");
+    const navDashboard = document.getElementById("navDashboard");
+    const navLogout = document.getElementById("navLogout");
+
+    if (argusIsLoggedIn()) {
+      navLogin.classList.add("hidden");
+      navDashboard.classList.remove("hidden");
+      navLogout.classList.remove("hidden");
+    }
+    navLogout.addEventListener("click", async (event) => {
+      event.preventDefault();
+      await argusLogout();
+      location.reload();
+    });
 
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -45,9 +66,22 @@
       scanBtn.textContent = "Scanning...";
 
       try {
+        // Attaching a token when logged in is opportunistic (@optional_auth
+        // server-side) -- anonymous scanning is unaffected either way.
+        let authHeader = {};
+        if (argusIsLoggedIn()) {
+          try {
+            const token = await argusGetValidAccessToken();
+            if (token) authHeader = { Authorization: `Bearer ${token}` };
+          } catch (err) {
+            // Session expired/revoked -- fall back to an anonymous scan
+            // rather than blocking the user's request.
+          }
+        }
+
         const resp = await fetch("/scan", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...authHeader },
           body: JSON.stringify({ url: urlInput.value }),
         });
         const body = await resp.json();
