@@ -8,13 +8,30 @@ signal makes **no extra network connection**.
 "Has HTTPS" stopped being a useful phishing signal years ago — free,
 instant-issuance CAs (Let's Encrypt, ZeroSSL) mean every phishing kit ships
 with valid TLS. What's still discriminating is **how recently** the
-certificate was issued: a domain registered an hour ago for a phishing
-campaign has a cert issued within the same window, while a legitimate
-site's cert is very rarely younger than the site itself. Age alone is a
-weak signal (many legitimate sites also rotate certs frequently) — this
-module treats a very fresh, free-CA-issued cert as a *contributing* signal,
-never a hard override, exactly per the plan ("age is a contributing signal,
-never a sole override").
+certificate was issued *relative to the domain itself*: a domain registered
+an hour ago for a phishing campaign has a cert issued within the same
+window, while a legitimate site's cert is very rarely younger than the site
+itself. Age alone is a weak signal (many legitimate sites also rotate certs
+frequently) — this module treats a very fresh, free-CA-issued cert as a
+*contributing* signal, never a hard override, exactly per the plan ("age is
+a contributing signal, never a sole override").
+
+DEC-031 found this module wasn't actually living up to its own docstring:
+the "fresh cert" axes triggered on cert freshness alone, with no check of
+the domain's own registration age — so routine CDN/edge cert rotation on
+long-established, real domains (PayPal, Google, Apple, Bank of America,
+Yahoo, Steam all reproduced this live) was enough to flag them, since a
+single moderately-weighted signal (weight 0.4, below every other signal's
+weight) could tip a borderline-legitimate model verdict with nothing else
+corroborating it. Fixed (DEC-034): the two freshness axes
+(``fresh_and_free_ca``, ``fresh_cert_only``) now also require the domain
+itself to look genuinely new — either the shared feature pipeline's own
+WHOIS-derived ``is_recently_registered`` (``src.features.domain_intel``,
+reused here rather than making a second WHOIS call), or an already-triggered
+brand-identity signal (``brand_mismatch``/``credential_context``) passed in
+as a corroborator. ``hostname_mismatch`` is unaffected — an actual
+CN/SAN-vs-visited-hostname mismatch is strong, specific evidence regardless
+of domain age.
 """
 
 from __future__ import annotations
@@ -107,6 +124,8 @@ def evaluate(
     page_artifacts: Optional["PageArtifacts"],
     visited_url: str,
     brand_index: "BrandIndex",
+    html_features: Optional[dict[str, Any]] = None,
+    corroborators: Optional[list[RiskSignal]] = None,
 ) -> RiskSignal:
     """Evaluate the TLS certificate captured for the visited page.
 
@@ -117,6 +136,15 @@ def evaluate(
         visited_url: The URL actually being evaluated.
         brand_index: Unused directly (kept for signature parity with the
             other signals / future brand-in-SAN analysis).
+        html_features: The live-extractor's feature dict, used only for its
+            WHOIS-derived ``is_recently_registered`` key (from
+            ``src.features.domain_intel``, already computed once for the
+            whole request — this signal makes no extra WHOIS call). ``None``
+            or a missing key is treated as "not recently registered".
+        corroborators: Other already-evaluated signals (in practice
+            ``brand_mismatch``/``credential_context``). If any of these is
+            ``triggered``, that stands in for domain-age corroboration too
+            (DEC-034) — see module docstring.
 
     Returns:
         A :class:`RiskSignal`; never raises.
@@ -148,16 +176,20 @@ def evaluate(
             pass
         covered = _hostname_covered(parsed_host or hostname, cert)
 
+        is_recently_registered = bool((html_features or {}).get("is_recently_registered"))
+        has_corroborating_signal = any(s.triggered for s in (corroborators or []))
+        domain_age_corroborated = is_recently_registered or has_corroborating_signal
+
         axes_triggered: list[str] = []
         score = 0.0
 
         if not covered:
             axes_triggered.append("hostname_mismatch")
             score += _AXIS_WEIGHTS["hostname_mismatch"]
-        elif is_fresh and is_free_ca:
+        elif is_fresh and is_free_ca and domain_age_corroborated:
             axes_triggered.append("fresh_and_free_ca")
             score += _AXIS_WEIGHTS["fresh_and_free_ca"]
-        elif is_fresh:
+        elif is_fresh and domain_age_corroborated:
             axes_triggered.append("fresh_cert_only")
             score += _AXIS_WEIGHTS["fresh_cert_only"]
 
@@ -173,6 +205,8 @@ def evaluate(
                 "is_free_ca": is_free_ca,
                 "hostname_covered": covered,
                 "axes_triggered": axes_triggered,
+                "domain_recently_registered": is_recently_registered,
+                "corroborated_by_other_signal": has_corroborating_signal,
             },
             latency_ms=_elapsed(start),
         )

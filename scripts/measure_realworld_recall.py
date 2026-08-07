@@ -28,23 +28,25 @@ import argparse
 import json
 import logging
 import random
+import statistics
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import joblib  # noqa: E402
-import pandas as pd  # noqa: E402
-import yaml  # noqa: E402
+import joblib
+import pandas as pd
+import yaml
 
-from src.data.loaders import normalize_url  # noqa: E402
-from src.detection import run_detection  # noqa: E402
-from src.detection.brand_reference import load_brand_index  # noqa: E402
-from src.features import page_artifacts  # noqa: E402
-from src.features.pipeline import extract_features  # noqa: E402
-from src.models.feature_adapter import adapt_to_training_contract  # noqa: E402
+from src.data.loaders import normalize_url
+from src.detection import run_detection
+from src.detection.brand_reference import load_brand_index
+from src.features import page_artifacts
+from src.features.pipeline import extract_features
+from src.models.feature_adapter import adapt_to_training_contract
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger("measure_realworld_recall")
@@ -75,8 +77,35 @@ def _load_active_prefilter_urls(threat_intel_config_path: Path) -> set[str]:
     return {normalize_url(u) for u in df["url"].dropna()}
 
 
+def _hosting_category(url: str, tenant_hosting_platforms: frozenset[str]) -> str:
+    """Classify a URL's hostname as ``"tenant_platform"`` or ``"standalone"``.
+
+    Derived, not fabricated: this is the exact axis DEC-018 identified as
+    the model's real-world blind spot (a domain-level feature contract
+    can't distinguish "a fresh Wix tenant" from "a fresh standalone
+    domain"), and it's the same hostname-suffix matching convention already
+    used by ``src.api.threat_intel.phishtank.load_phishtank_hostname_index``
+    and ``src.detection.signals.platform_risk`` -- deliberately not a
+    finer-grained per-platform breakdown, since a modest sample size would
+    make most individual platform buckets too small to read anything from.
+    """
+    try:
+        hostname = (urlparse(url).hostname or "").lower()
+    except Exception:  # noqa: BLE001 - an unparseable URL just buckets as "standalone"
+        return "standalone"
+    for platform in tenant_hosting_platforms:
+        if hostname == platform or hostname.endswith(f".{platform}"):
+            return "tenant_platform"
+    return "standalone"
+
+
 def _predict_one(
-    url: str, pipeline: Any, threshold: float, detection_config: dict, brand_index: Any
+    url: str,
+    pipeline: Any,
+    threshold: float,
+    detection_config: dict,
+    brand_index: Any,
+    tenant_hosting_platforms: frozenset[str] = frozenset(),
 ) -> dict[str, Any]:
     """Run both the model-only and fused verdict for a single URL."""
     fv_fast = extract_features(url)
@@ -95,6 +124,8 @@ def _predict_one(
         config=detection_config,
     )
 
+    triggered_signals = [s.name for s in fused.signals if s.triggered]
+
     return {
         "url": url,
         "reachable": artifacts.ok,
@@ -103,6 +134,8 @@ def _predict_one(
         "fused_label": fused.label,
         "risk_score": fused.risk_score,
         "decisive_source": fused.decisive_source,
+        "hosting_category": _hosting_category(url, tenant_hosting_platforms),
+        "triggered_signals": triggered_signals,
     }
 
 
@@ -112,6 +145,59 @@ def _recall(results: list[dict[str, Any]], label_key: str) -> Optional[float]:
         return None
     tp = sum(1 for r in reachable if r[label_key] == "phishing")
     return tp / len(reachable)
+
+
+def _recall_breakdown(
+    results: list[dict[str, Any]], group_key: str, multi_valued: bool = False
+) -> dict[str, dict[str, Any]]:
+    """Group reachable results by ``group_key`` and report model-only vs.
+    fused recall within each group.
+
+    Args:
+        results: The phishing-sample prediction results (not the control set).
+        group_key: ``"hosting_category"`` or ``"triggered_signals"``.
+        multi_valued: If ``True``, ``group_key``'s value is a list and a
+            result can belong to multiple groups (a URL can trigger several
+            signals at once) -- ``"none"`` is used for a result that
+            triggered no signal at all.
+
+    Returns:
+        ``{group_name: {"n": int, "model_only_recall": float|None,
+        "fused_recall": float|None}}``, sorted by group name for
+        deterministic output.
+    """
+    reachable = [r for r in results if r["reachable"]]
+    groups: dict[str, list[dict[str, Any]]] = {}
+
+    for r in reachable:
+        values = r[group_key] if multi_valued else [r[group_key]]
+        values = values or ["none"]
+        for value in values:
+            groups.setdefault(value, []).append(r)
+
+    return {
+        name: {
+            "n": len(members),
+            "model_only_recall": _recall(members, "model_only_label"),
+            "fused_recall": _recall(members, "fused_label"),
+        }
+        for name, members in sorted(groups.items())
+    }
+
+
+def _confidence_stats(results: list[dict[str, Any]]) -> dict[str, Optional[float]]:
+    """Summary statistics of the model's raw phishing-probability output
+    over reachable phishing-sample results -- tracked run-over-run by
+    ``scripts/eval_drift.py`` as a prediction/confidence drift signal."""
+    probas = [r["model_proba"] for r in results if r["reachable"]]
+    if not probas:
+        return {"mean": None, "stdev": None, "min": None, "max": None}
+    return {
+        "mean": statistics.mean(probas),
+        "stdev": statistics.stdev(probas) if len(probas) > 1 else 0.0,
+        "min": min(probas),
+        "max": max(probas),
+    }
 
 
 def run(
@@ -144,6 +230,10 @@ def run(
     ti_path = threat_intel_config_path or (_PROJECT_ROOT / "configs" / "threat_intel_config.yaml")
     excluded = _load_active_prefilter_urls(ti_path)
 
+    tenant_hosting_platforms = frozenset(
+        p.lower() for p in detection_config.get("tenant_hosting_platforms", [])
+    )
+
     df = pd.read_csv(eval_feed)
     if "verified" in df.columns:
         df = df[df["verified"].astype(str).str.strip().str.lower() == "yes"]
@@ -161,15 +251,37 @@ def run(
     results = []
     for url in urls:
         try:
-            results.append(_predict_one(url, pipeline, threshold, detection_config, brand_index))
+            results.append(
+                _predict_one(
+                    url, pipeline, threshold, detection_config, brand_index, tenant_hosting_platforms
+                )
+            )
         except Exception as exc:  # noqa: BLE001 - one URL's failure never aborts the run
             logger.warning("Prediction failed for %r: %s", url, exc)
 
     model_recall = _recall(results, "model_only_label")
     fused_recall = _recall(results, "fused_label")
 
+    # DEC-031/034: previously `brand_index.brands[:control_sample_size]` --
+    # literally "the first N brands in list order". brands.json is
+    # front-loaded with the most globally dominant household names (PayPal,
+    # Google, Microsoft, Apple, Amazon, ...), which are disproportionately
+    # old-domain, high-traffic, complex-infrastructure sites (frequent CDN
+    # cert rotation) -- not a representative cross-section of the full
+    # 166-brand reference. A reproducible random sample (same
+    # Iron-Law-#6 seed, independent of the phishing-sample rng above so it
+    # doesn't shift with --sample-size) removes that positional bias while
+    # keeping the run fully reproducible.
+    control_rng = random.Random(_RANDOM_SEED)
+    control_brands = list(brand_index.brands)
+    control_sample = (
+        control_rng.sample(control_brands, control_sample_size)
+        if len(control_brands) > control_sample_size
+        else control_brands
+    )
+
     control_results = []
-    for brand in brand_index.brands[:control_sample_size]:
+    for brand in control_sample:
         if not brand.domains:
             continue
         url = f"https://{brand.domains[0]}"
@@ -197,6 +309,11 @@ def run(
         "control_set_size": len(control_results),
         "model_only_fp_rate": model_fp_rate,
         "fused_fp_rate": fused_fp_rate,
+        # Phase 3 (F10) additions -- see EvalRun's docstring for why these
+        # are derived breakdowns, not fabricated ground-truth categories.
+        "recall_by_hosting_category": _recall_breakdown(results, "hosting_category"),
+        "recall_by_signal": _recall_breakdown(results, "triggered_signals", multi_valued=True),
+        "confidence_stats": _confidence_stats(results),
         "note": (
             "Post-training validation only -- independent of the live prefilter "
             "snapshot (excluded above); does not modify the model or brand "

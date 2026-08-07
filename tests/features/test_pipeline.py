@@ -108,7 +108,7 @@ def test_domain_intel_off_by_default():
 def test_all_tiers_together():
     """All three tiers run and merge into one feature dict."""
     html = "<html><title>T</title><body><input type='password'></body></html>"
-    fake_domain = {k: 0 for k in pipeline.domain_intel.DOMAIN_INTEL_KEYS}
+    fake_domain = dict.fromkeys(pipeline.domain_intel.DOMAIN_INTEL_KEYS, 0)
     with mock.patch(
         f"{MODULE}.domain_intel.extract_domain_intel", return_value=fake_domain
     ):
@@ -133,7 +133,7 @@ def test_extraction_time_recorded():
 def test_model_version_compatible_true_when_all_tiers_run():
     """When every contract feature is produced, the vector is model-ready."""
     html = "<html><title>t</title><body><p>x</p></body></html>"
-    fake_domain = {k: 0 for k in pipeline.domain_intel.DOMAIN_INTEL_KEYS}
+    fake_domain = dict.fromkeys(pipeline.domain_intel.DOMAIN_INTEL_KEYS, 0)
     with mock.patch(
         f"{MODULE}.domain_intel.extract_domain_intel", return_value=fake_domain
     ):

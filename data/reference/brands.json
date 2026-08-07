@@ -1,7 +1,7 @@
 {
-  "version": "0.1.0",
-  "generated_at": "2026-07-16T09:40:54.943737+00:00",
-  "note": "Seed brand/domain/alias list (DEC-C). favicon_mmh3 and logo_phash are shipped empty -- this environment has no network access to fetch real favicons from these live sites. Run `python scripts/build_brand_reference.py` with network access to populate them; A1 (brand-mismatch) and A3 (typosquat) work immediately on the seed data alone, since they only need domains/aliases, not hashes. Tranco is an optional additional seed source for more domains -- never used as ML training/validation data.",
+  "version": "0.2.0",
+  "generated_at": "2026-07-16T20:46:40.785046+00:00",
+  "note": "Brand/domain/alias reference (DEC-C, expanded Phase 3 F5). The original 27 brands' favicon_mmh3/logo_phash were populated by scripts/build_brand_reference.py with network access; the 139 brands added in this expansion ship with empty hash arrays for the same reason the original 27 once did -- this build environment has no network access to fetch their real favicons. A1 (brand-mismatch) and A3 (typosquat) work fully on domains/aliases alone; run scripts/build_brand_reference.py with network access to populate hashes, THEN re-run the pairwise favicon-distance safety check documented in configs/detection_config.yaml's phash_tolerance comment (DEC-026) before assuming the current tolerance is still safe -- a larger brand set can only shrink the minimum observed distance between two unrelated brands' icons. Tranco is an optional additional seed source for more domains -- never used as ML training/validation data.",
   "brands": [
     {
       "name": "PayPal",
@@ -314,7 +314,7 @@
         "outlook"
       ],
       "favicon_mmh3": [
-        1832989233,
+        -289681350,
         1972282798
       ],
       "logo_phash": [
@@ -372,7 +372,7 @@
         "fedex"
       ],
       "favicon_mmh3": [
-        -2081990408
+        1834538082
       ],
       "logo_phash": []
     },
@@ -406,6 +406,1946 @@
       ],
       "logo_phash": [
         "ef183038380401ff"
+      ]
+    },
+    {
+      "name": "Citibank",
+      "domains": [
+        "citi.com",
+        "citibank.com"
+      ],
+      "aliases": [
+        "citibank",
+        "citi"
+      ],
+      "favicon_mmh3": [
+        1453892949
+      ],
+      "logo_phash": [
+        "ffe3c181a181ffff"
+      ]
+    },
+    {
+      "name": "HSBC",
+      "domains": [
+        "hsbc.com"
+      ],
+      "aliases": [
+        "hsbc"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "Barclays",
+      "domains": [
+        "barclays.co.uk"
+      ],
+      "aliases": [
+        "barclays"
+      ],
+      "favicon_mmh3": [
+        -1624061095
+      ],
+      "logo_phash": []
+    },
+    {
+      "name": "Capital One",
+      "domains": [
+        "capitalone.com"
+      ],
+      "aliases": [
+        "capital one"
+      ],
+      "favicon_mmh3": [
+        1511040360
+      ],
+      "logo_phash": [
+        "3c7e01e1f3e76e1c"
+      ]
+    },
+    {
+      "name": "US Bank",
+      "domains": [
+        "usbank.com"
+      ],
+      "aliases": [
+        "us bank",
+        "u.s. bank"
+      ],
+      "favicon_mmh3": [
+        -386191305
+      ],
+      "logo_phash": [
+        "ffffffffffff7e08"
+      ]
+    },
+    {
+      "name": "TD Bank",
+      "domains": [
+        "td.com",
+        "tdbank.com"
+      ],
+      "aliases": [
+        "td bank"
+      ],
+      "favicon_mmh3": [
+        1312503958
+      ],
+      "logo_phash": [
+        "007c7f3b3b3f2c00"
+      ]
+    },
+    {
+      "name": "PNC Bank",
+      "domains": [
+        "pnc.com"
+      ],
+      "aliases": [
+        "pnc"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "Truist",
+      "domains": [
+        "truist.com"
+      ],
+      "aliases": [
+        "truist"
+      ],
+      "favicon_mmh3": [
+        617128847
+      ],
+      "logo_phash": [
+        "007e5a18185a7e00"
+      ]
+    },
+    {
+      "name": "Santander",
+      "domains": [
+        "santander.com"
+      ],
+      "aliases": [
+        "santander"
+      ],
+      "favicon_mmh3": [
+        -289646700
+      ],
+      "logo_phash": [
+        "0008183c7eff7e00"
+      ]
+    },
+    {
+      "name": "Deutsche Bank",
+      "domains": [
+        "db.com"
+      ],
+      "aliases": [
+        "deutsche bank"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "Standard Chartered",
+      "domains": [
+        "sc.com"
+      ],
+      "aliases": [
+        "standard chartered"
+      ],
+      "favicon_mmh3": [
+        -2020964604
+      ],
+      "logo_phash": [
+        "183c3e7c7e7e3e7e"
+      ]
+    },
+    {
+      "name": "ICICI Bank",
+      "domains": [
+        "icicibank.com"
+      ],
+      "aliases": [
+        "icici",
+        "icici bank"
+      ],
+      "favicon_mmh3": [
+        -2119226503
+      ],
+      "logo_phash": [
+        "003e6c5a5a5e7c00"
+      ]
+    },
+    {
+      "name": "HDFC Bank",
+      "domains": [
+        "hdfcbank.com"
+      ],
+      "aliases": [
+        "hdfc",
+        "hdfc bank"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "State Bank of India",
+      "domains": [
+        "sbi.co.in",
+        "onlinesbi.sbi"
+      ],
+      "aliases": [
+        "sbi",
+        "state bank of india"
+      ],
+      "favicon_mmh3": [
+        -969619031,
+        1296946244
+      ],
+      "logo_phash": [
+        "e7818118188181ff",
+        "e7818118188199db"
+      ]
+    },
+    {
+      "name": "Axis Bank",
+      "domains": [
+        "axisbank.com"
+      ],
+      "aliases": [
+        "axis bank"
+      ],
+      "favicon_mmh3": [
+        -1949382272
+      ],
+      "logo_phash": [
+        "ffe7e7c78f81183c"
+      ]
+    },
+    {
+      "name": "Lloyds Bank",
+      "domains": [
+        "lloydsbank.com"
+      ],
+      "aliases": [
+        "lloyds",
+        "lloyds bank"
+      ],
+      "favicon_mmh3": [
+        326253295
+      ],
+      "logo_phash": []
+    },
+    {
+      "name": "NatWest",
+      "domains": [
+        "natwest.com"
+      ],
+      "aliases": [
+        "natwest"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "Royal Bank of Canada",
+      "domains": [
+        "rbc.com"
+      ],
+      "aliases": [
+        "rbc",
+        "royal bank of canada"
+      ],
+      "favicon_mmh3": [
+        -1815587282
+      ],
+      "logo_phash": [
+        "38787e7e3e7c3c00"
+      ]
+    },
+    {
+      "name": "Scotiabank",
+      "domains": [
+        "scotiabank.com"
+      ],
+      "aliases": [
+        "scotiabank"
+      ],
+      "favicon_mmh3": [
+        -1850249343
+      ],
+      "logo_phash": [
+        "001e3c3c1c3c7800"
+      ]
+    },
+    {
+      "name": "Commonwealth Bank",
+      "domains": [
+        "commbank.com.au"
+      ],
+      "aliases": [
+        "commbank",
+        "commonwealth bank"
+      ],
+      "favicon_mmh3": [
+        254788495
+      ],
+      "logo_phash": [
+        "fcfcfcf8f9f2e0e0"
+      ]
+    },
+    {
+      "name": "ANZ",
+      "domains": [
+        "anz.com"
+      ],
+      "aliases": [
+        "anz"
+      ],
+      "favicon_mmh3": [
+        123329812
+      ],
+      "logo_phash": [
+        "3c3c3c3cdbe76624"
+      ]
+    },
+    {
+      "name": "ING",
+      "domains": [
+        "ing.com"
+      ],
+      "aliases": [
+        "ing"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "Venmo",
+      "domains": [
+        "venmo.com"
+      ],
+      "aliases": [
+        "venmo"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "Zelle",
+      "domains": [
+        "zellepay.com"
+      ],
+      "aliases": [
+        "zelle"
+      ],
+      "favicon_mmh3": [
+        11692373
+      ],
+      "logo_phash": [
+        "007e7e7e7e7e7e00"
+      ]
+    },
+    {
+      "name": "Stripe",
+      "domains": [
+        "stripe.com"
+      ],
+      "aliases": [
+        "stripe"
+      ],
+      "favicon_mmh3": [
+        1316718382
+      ],
+      "logo_phash": [
+        "00003c3c3c3c0000"
+      ]
+    },
+    {
+      "name": "Square",
+      "domains": [
+        "squareup.com"
+      ],
+      "aliases": [
+        "square"
+      ],
+      "favicon_mmh3": [
+        1742357853
+      ],
+      "logo_phash": [
+        "0000000000000000"
+      ]
+    },
+    {
+      "name": "Cash App",
+      "domains": [
+        "cash.app"
+      ],
+      "aliases": [
+        "cash app",
+        "cashapp"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "Western Union",
+      "domains": [
+        "westernunion.com"
+      ],
+      "aliases": [
+        "western union"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "MoneyGram",
+      "domains": [
+        "moneygram.com"
+      ],
+      "aliases": [
+        "moneygram"
+      ],
+      "favicon_mmh3": [
+        1965032510
+      ],
+      "logo_phash": [
+        "60c0ccdcfc740000"
+      ]
+    },
+    {
+      "name": "Wise",
+      "domains": [
+        "wise.com"
+      ],
+      "aliases": [
+        "wise",
+        "transferwise"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "Payoneer",
+      "domains": [
+        "payoneer.com"
+      ],
+      "aliases": [
+        "payoneer"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "Klarna",
+      "domains": [
+        "klarna.com"
+      ],
+      "aliases": [
+        "klarna"
+      ],
+      "favicon_mmh3": [
+        1682069798
+      ],
+      "logo_phash": [
+        "ffdbd3c3c7d3dbff"
+      ]
+    },
+    {
+      "name": "Affirm",
+      "domains": [
+        "affirm.com"
+      ],
+      "aliases": [
+        "affirm"
+      ],
+      "favicon_mmh3": [
+        -862515841
+      ],
+      "logo_phash": [
+        "3c5aa5e7e7ef7e3c"
+      ]
+    },
+    {
+      "name": "Kraken",
+      "domains": [
+        "kraken.com"
+      ],
+      "aliases": [
+        "kraken"
+      ],
+      "favicon_mmh3": [
+        1822250713
+      ],
+      "logo_phash": [
+        "00003c3c7e3c0000"
+      ]
+    },
+    {
+      "name": "Gemini",
+      "domains": [
+        "gemini.com"
+      ],
+      "aliases": [
+        "gemini"
+      ],
+      "favicon_mmh3": [
+        1461294548
+      ],
+      "logo_phash": [
+        "001c1e7e7e783800"
+      ]
+    },
+    {
+      "name": "Crypto.com",
+      "domains": [
+        "crypto.com"
+      ],
+      "aliases": [
+        "crypto.com"
+      ],
+      "favicon_mmh3": [
+        640381300
+      ],
+      "logo_phash": [
+        "00183c3c7e3c3000"
+      ]
+    },
+    {
+      "name": "Blockchain.com",
+      "domains": [
+        "blockchain.com"
+      ],
+      "aliases": [
+        "blockchain"
+      ],
+      "favicon_mmh3": [
+        -490286589
+      ],
+      "logo_phash": [
+        "183c3cdbf77e3c10"
+      ]
+    },
+    {
+      "name": "MetaMask",
+      "domains": [
+        "metamask.io"
+      ],
+      "aliases": [
+        "metamask"
+      ],
+      "favicon_mmh3": [
+        -476423628
+      ],
+      "logo_phash": [
+        "00241818ffffff18"
+      ]
+    },
+    {
+      "name": "Trust Wallet",
+      "domains": [
+        "trustwallet.com"
+      ],
+      "aliases": [
+        "trust wallet"
+      ],
+      "favicon_mmh3": [
+        367314568
+      ],
+      "logo_phash": [
+        "0f0f0f0f0f020000"
+      ]
+    },
+    {
+      "name": "Ledger",
+      "domains": [
+        "ledger.com"
+      ],
+      "aliases": [
+        "ledger"
+      ],
+      "favicon_mmh3": [
+        555163931
+      ],
+      "logo_phash": [
+        "0000000000000000"
+      ]
+    },
+    {
+      "name": "Trezor",
+      "domains": [
+        "trezor.io"
+      ],
+      "aliases": [
+        "trezor"
+      ],
+      "favicon_mmh3": [
+        -890313152
+      ],
+      "logo_phash": [
+        "e7c3c3819999c3ff"
+      ]
+    },
+    {
+      "name": "OKX",
+      "domains": [
+        "okx.com"
+      ],
+      "aliases": [
+        "okx"
+      ],
+      "favicon_mmh3": [
+        -2107586922
+      ],
+      "logo_phash": [
+        "0024661818662400"
+      ]
+    },
+    {
+      "name": "Bybit",
+      "domains": [
+        "bybit.com"
+      ],
+      "aliases": [
+        "bybit"
+      ],
+      "favicon_mmh3": [
+        -2091461310
+      ],
+      "logo_phash": [
+        "000004ffff7a0000"
+      ]
+    },
+    {
+      "name": "KuCoin",
+      "domains": [
+        "kucoin.com"
+      ],
+      "aliases": [
+        "kucoin"
+      ],
+      "favicon_mmh3": [
+        1863281625
+      ],
+      "logo_phash": []
+    },
+    {
+      "name": "Robinhood",
+      "domains": [
+        "robinhood.com"
+      ],
+      "aliases": [
+        "robinhood"
+      ],
+      "favicon_mmh3": [
+        733877801
+      ],
+      "logo_phash": [
+        "fff1e1c3c7cfbfff"
+      ]
+    },
+    {
+      "name": "Salesforce",
+      "domains": [
+        "salesforce.com"
+      ],
+      "aliases": [
+        "salesforce"
+      ],
+      "favicon_mmh3": [
+        1104585116
+      ],
+      "logo_phash": [
+        "ff8780000001cfff"
+      ]
+    },
+    {
+      "name": "Oracle",
+      "domains": [
+        "oracle.com"
+      ],
+      "aliases": [
+        "oracle"
+      ],
+      "favicon_mmh3": [
+        -1981534752
+      ],
+      "logo_phash": [
+        "007eff8181ff7e00"
+      ]
+    },
+    {
+      "name": "IBM",
+      "domains": [
+        "ibm.com"
+      ],
+      "aliases": [
+        "ibm"
+      ],
+      "favicon_mmh3": [
+        -690859644
+      ],
+      "logo_phash": [
+        "0000000000000000"
+      ]
+    },
+    {
+      "name": "Cisco",
+      "domains": [
+        "cisco.com"
+      ],
+      "aliases": [
+        "cisco"
+      ],
+      "favicon_mmh3": [
+        -1354674639
+      ],
+      "logo_phash": [
+        "ffdb0013690049ff"
+      ]
+    },
+    {
+      "name": "Zoom",
+      "domains": [
+        "zoom.us"
+      ],
+      "aliases": [
+        "zoom"
+      ],
+      "favicon_mmh3": [
+        -292776269
+      ],
+      "logo_phash": [
+        "3c1e7f7f7f700000"
+      ]
+    },
+    {
+      "name": "Slack",
+      "domains": [
+        "slack.com"
+      ],
+      "aliases": [
+        "slack"
+      ],
+      "favicon_mmh3": [
+        237165573
+      ],
+      "logo_phash": [
+        "3c3cfdf10fbf2c2c"
+      ]
+    },
+    {
+      "name": "Box",
+      "domains": [
+        "box.com"
+      ],
+      "aliases": [
+        "box"
+      ],
+      "favicon_mmh3": [
+        1008957268
+      ],
+      "logo_phash": [
+        "0000c0fffe7f0000"
+      ]
+    },
+    {
+      "name": "GitHub",
+      "domains": [
+        "github.com"
+      ],
+      "aliases": [
+        "github"
+      ],
+      "favicon_mmh3": [
+        -456454785
+      ],
+      "logo_phash": [
+        "3c7ec3c1c3e76624"
+      ]
+    },
+    {
+      "name": "GitLab",
+      "domains": [
+        "gitlab.com"
+      ],
+      "aliases": [
+        "gitlab"
+      ],
+      "favicon_mmh3": [
+        -2110144632
+      ],
+      "logo_phash": [
+        "424267ffff7e3c18"
+      ]
+    },
+    {
+      "name": "Atlassian",
+      "domains": [
+        "atlassian.com"
+      ],
+      "aliases": [
+        "atlassian",
+        "jira",
+        "confluence"
+      ],
+      "favicon_mmh3": [
+        1600393851
+      ],
+      "logo_phash": [
+        "0018181c3c7e7e00"
+      ]
+    },
+    {
+      "name": "Notion",
+      "domains": [
+        "notion.so"
+      ],
+      "aliases": [
+        "notion"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "Asana",
+      "domains": [
+        "asana.com"
+      ],
+      "aliases": [
+        "asana"
+      ],
+      "favicon_mmh3": [
+        278757259
+      ],
+      "logo_phash": [
+        "00183c187e7e6600"
+      ]
+    },
+    {
+      "name": "HubSpot",
+      "domains": [
+        "hubspot.com"
+      ],
+      "aliases": [
+        "hubspot"
+      ],
+      "favicon_mmh3": [
+        959455855
+      ],
+      "logo_phash": [
+        "006c7c1e1e1e1000"
+      ]
+    },
+    {
+      "name": "Shopify",
+      "domains": [
+        "shopify.com"
+      ],
+      "aliases": [
+        "shopify"
+      ],
+      "favicon_mmh3": [
+        -1061703379
+      ],
+      "logo_phash": [
+        "ffe391b1b1b1a0e1"
+      ]
+    },
+    {
+      "name": "WordPress",
+      "domains": [
+        "wordpress.com"
+      ],
+      "aliases": [
+        "wordpress"
+      ],
+      "favicon_mmh3": [
+        2017495337
+      ],
+      "logo_phash": [
+        "003c7e7e7e7e3c00"
+      ]
+    },
+    {
+      "name": "Squarespace",
+      "domains": [
+        "squarespace.com"
+      ],
+      "aliases": [
+        "squarespace"
+      ],
+      "favicon_mmh3": [
+        730165801
+      ],
+      "logo_phash": [
+        "003c7affff5e3c00"
+      ]
+    },
+    {
+      "name": "Cloudflare",
+      "domains": [
+        "cloudflare.com"
+      ],
+      "aliases": [
+        "cloudflare"
+      ],
+      "favicon_mmh3": [
+        -1584763066
+      ],
+      "logo_phash": [
+        "00001c7e7f7e0000"
+      ]
+    },
+    {
+      "name": "DigitalOcean",
+      "domains": [
+        "digitalocean.com"
+      ],
+      "aliases": [
+        "digitalocean"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "Zendesk",
+      "domains": [
+        "zendesk.com"
+      ],
+      "aliases": [
+        "zendesk"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "GoDaddy",
+      "domains": [
+        "godaddy.com"
+      ],
+      "aliases": [
+        "godaddy"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "ProtonMail",
+      "domains": [
+        "proton.me",
+        "protonmail.com"
+      ],
+      "aliases": [
+        "protonmail",
+        "proton mail"
+      ],
+      "favicon_mmh3": [
+        -797736563
+      ],
+      "logo_phash": [
+        "7c7e46067e604040"
+      ]
+    },
+    {
+      "name": "Zoho",
+      "domains": [
+        "zoho.com"
+      ],
+      "aliases": [
+        "zoho"
+      ],
+      "favicon_mmh3": [
+        2126415815
+      ],
+      "logo_phash": [
+        "12803d3dfcfc7178"
+      ]
+    },
+    {
+      "name": "AOL",
+      "domains": [
+        "aol.com"
+      ],
+      "aliases": [
+        "aol"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "Walmart",
+      "domains": [
+        "walmart.com"
+      ],
+      "aliases": [
+        "walmart"
+      ],
+      "favicon_mmh3": [
+        -109982622
+      ],
+      "logo_phash": [
+        "18187e24247e1818"
+      ]
+    },
+    {
+      "name": "Target",
+      "domains": [
+        "target.com"
+      ],
+      "aliases": [
+        "target"
+      ],
+      "favicon_mmh3": [
+        -1823400966
+      ],
+      "logo_phash": [
+        "e7c1bd2426bc89e3"
+      ]
+    },
+    {
+      "name": "Best Buy",
+      "domains": [
+        "bestbuy.com"
+      ],
+      "aliases": [
+        "best buy"
+      ],
+      "favicon_mmh3": [
+        -952760402
+      ],
+      "logo_phash": [
+        "003fffffffff0000"
+      ]
+    },
+    {
+      "name": "Costco",
+      "domains": [
+        "costco.com"
+      ],
+      "aliases": [
+        "costco"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "Etsy",
+      "domains": [
+        "etsy.com"
+      ],
+      "aliases": [
+        "etsy"
+      ],
+      "favicon_mmh3": [
+        1115824880
+      ],
+      "logo_phash": [
+        "003c343c3c343c00"
+      ]
+    },
+    {
+      "name": "Alibaba",
+      "domains": [
+        "alibaba.com"
+      ],
+      "aliases": [
+        "alibaba"
+      ],
+      "favicon_mmh3": [
+        1116928481
+      ],
+      "logo_phash": [
+        "1c20c70f013f3e7c"
+      ]
+    },
+    {
+      "name": "AliExpress",
+      "domains": [
+        "aliexpress.com"
+      ],
+      "aliases": [
+        "aliexpress"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "Wayfair",
+      "domains": [
+        "wayfair.com"
+      ],
+      "aliases": [
+        "wayfair"
+      ],
+      "favicon_mmh3": [
+        -1482129635
+      ],
+      "logo_phash": [
+        "003c7e66667e3c00"
+      ]
+    },
+    {
+      "name": "Zalando",
+      "domains": [
+        "zalando.com"
+      ],
+      "aliases": [
+        "zalando"
+      ],
+      "favicon_mmh3": [
+        629626045
+      ],
+      "logo_phash": []
+    },
+    {
+      "name": "Flipkart",
+      "domains": [
+        "flipkart.com"
+      ],
+      "aliases": [
+        "flipkart"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "Myntra",
+      "domains": [
+        "myntra.com"
+      ],
+      "aliases": [
+        "myntra"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "WhatsApp",
+      "domains": [
+        "whatsapp.com"
+      ],
+      "aliases": [
+        "whatsapp"
+      ],
+      "favicon_mmh3": [
+        68493008
+      ],
+      "logo_phash": [
+        "3c42e1a1b58dc2fc"
+      ]
+    },
+    {
+      "name": "Telegram",
+      "domains": [
+        "telegram.org"
+      ],
+      "aliases": [
+        "telegram"
+      ],
+      "favicon_mmh3": [
+        -767641987
+      ],
+      "logo_phash": [
+        "3c7e5effff5c6600"
+      ]
+    },
+    {
+      "name": "Snapchat",
+      "domains": [
+        "snapchat.com"
+      ],
+      "aliases": [
+        "snapchat"
+      ],
+      "favicon_mmh3": [
+        1886081255
+      ],
+      "logo_phash": [
+        "7ec3db9999bdc37e"
+      ]
+    },
+    {
+      "name": "TikTok",
+      "domains": [
+        "tiktok.com"
+      ],
+      "aliases": [
+        "tiktok"
+      ],
+      "favicon_mmh3": [
+        -882702695
+      ],
+      "logo_phash": [
+        "00080c3c68783000"
+      ]
+    },
+    {
+      "name": "Pinterest",
+      "domains": [
+        "pinterest.com"
+      ],
+      "aliases": [
+        "pinterest"
+      ],
+      "favicon_mmh3": [
+        1095441215
+      ],
+      "logo_phash": [
+        "00183e76763c3820"
+      ]
+    },
+    {
+      "name": "Reddit",
+      "domains": [
+        "reddit.com"
+      ],
+      "aliases": [
+        "reddit"
+      ],
+      "favicon_mmh3": [
+        1813988124
+      ],
+      "logo_phash": [
+        "000c1c7e7e3e1800"
+      ]
+    },
+    {
+      "name": "Discord",
+      "domains": [
+        "discord.com"
+      ],
+      "aliases": [
+        "discord"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "Twitch",
+      "domains": [
+        "twitch.tv"
+      ],
+      "aliases": [
+        "twitch"
+      ],
+      "favicon_mmh3": [
+        -1601662376
+      ],
+      "logo_phash": [
+        "3e3e3e3e3e5c0000"
+      ]
+    },
+    {
+      "name": "YouTube",
+      "domains": [
+        "youtube.com"
+      ],
+      "aliases": [
+        "youtube"
+      ],
+      "favicon_mmh3": [
+        1908550794
+      ],
+      "logo_phash": [
+        "ff810018180081ff"
+      ]
+    },
+    {
+      "name": "Skype",
+      "domains": [
+        "skype.com"
+      ],
+      "aliases": [
+        "skype"
+      ],
+      "favicon_mmh3": [
+        -1889875560
+      ],
+      "logo_phash": []
+    },
+    {
+      "name": "WeChat",
+      "domains": [
+        "wechat.com"
+      ],
+      "aliases": [
+        "wechat"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "Line",
+      "domains": [
+        "line.me"
+      ],
+      "aliases": [
+        "line"
+      ],
+      "favicon_mmh3": [
+        -1780476037
+      ],
+      "logo_phash": [
+        "81183c7e7e3c0081"
+      ]
+    },
+    {
+      "name": "Spotify",
+      "domains": [
+        "spotify.com"
+      ],
+      "aliases": [
+        "spotify"
+      ],
+      "favicon_mmh3": [
+        -1293999669
+      ],
+      "logo_phash": [
+        "c3813c06080081c3"
+      ]
+    },
+    {
+      "name": "Disney+",
+      "domains": [
+        "disneyplus.com"
+      ],
+      "aliases": [
+        "disney plus",
+        "disney+"
+      ],
+      "favicon_mmh3": [
+        1749040683
+      ],
+      "logo_phash": [
+        "00fc16137f773e00"
+      ]
+    },
+    {
+      "name": "Hulu",
+      "domains": [
+        "hulu.com"
+      ],
+      "aliases": [
+        "hulu"
+      ],
+      "favicon_mmh3": [
+        1871733521
+      ],
+      "logo_phash": []
+    },
+    {
+      "name": "Max",
+      "domains": [
+        "max.com"
+      ],
+      "aliases": [
+        "hbo max",
+        "max"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "Paramount+",
+      "domains": [
+        "paramountplus.com"
+      ],
+      "aliases": [
+        "paramount plus",
+        "paramount+"
+      ],
+      "favicon_mmh3": [
+        -1673638939
+      ],
+      "logo_phash": [
+        "003c7effffce0000"
+      ]
+    },
+    {
+      "name": "Peacock",
+      "domains": [
+        "peacocktv.com"
+      ],
+      "aliases": [
+        "peacock"
+      ],
+      "favicon_mmh3": [
+        -899062517
+      ],
+      "logo_phash": []
+    },
+    {
+      "name": "UPS",
+      "domains": [
+        "ups.com"
+      ],
+      "aliases": [
+        "ups"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "Royal Mail",
+      "domains": [
+        "royalmail.com"
+      ],
+      "aliases": [
+        "royal mail"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "Canada Post",
+      "domains": [
+        "canadapost.ca"
+      ],
+      "aliases": [
+        "canada post"
+      ],
+      "favicon_mmh3": [
+        366399832
+      ],
+      "logo_phash": [
+        "0000303e1e3c0000"
+      ]
+    },
+    {
+      "name": "Australia Post",
+      "domains": [
+        "auspost.com.au"
+      ],
+      "aliases": [
+        "australia post",
+        "auspost"
+      ],
+      "favicon_mmh3": [
+        -1192227321
+      ],
+      "logo_phash": [
+        "f39d1c1c1c1091f3"
+      ]
+    },
+    {
+      "name": "India Post",
+      "domains": [
+        "indiapost.gov.in"
+      ],
+      "aliases": [
+        "india post"
+      ],
+      "favicon_mmh3": [
+        -267793140
+      ],
+      "logo_phash": [
+        "7337ecfc7c3c7c0c"
+      ]
+    },
+    {
+      "name": "Social Security Administration",
+      "domains": [
+        "ssa.gov"
+      ],
+      "aliases": [
+        "social security",
+        "ssa"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "HMRC",
+      "domains": [
+        "hmrc.gov.uk"
+      ],
+      "aliases": [
+        "hmrc"
+      ],
+      "favicon_mmh3": [
+        -1650477351
+      ],
+      "logo_phash": [
+        "00183c5a7e7e7e00"
+      ]
+    },
+    {
+      "name": "GOV.UK",
+      "domains": [
+        "gov.uk"
+      ],
+      "aliases": [
+        "gov.uk"
+      ],
+      "favicon_mmh3": [
+        -1650477351
+      ],
+      "logo_phash": [
+        "00183c5a7e7e7e00"
+      ]
+    },
+    {
+      "name": "Medicare",
+      "domains": [
+        "medicare.gov"
+      ],
+      "aliases": [
+        "medicare"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "Canada Revenue Agency",
+      "domains": [
+        "canada.ca"
+      ],
+      "aliases": [
+        "cra",
+        "canada revenue agency"
+      ],
+      "favicon_mmh3": [
+        -1346214243
+      ],
+      "logo_phash": [
+        "fdffef070383c3c7"
+      ]
+    },
+    {
+      "name": "Verizon",
+      "domains": [
+        "verizon.com"
+      ],
+      "aliases": [
+        "verizon"
+      ],
+      "favicon_mmh3": [
+        75441518
+      ],
+      "logo_phash": [
+        "240038787a787434"
+      ]
+    },
+    {
+      "name": "AT&T",
+      "domains": [
+        "att.com"
+      ],
+      "aliases": [
+        "at&t",
+        "att"
+      ],
+      "favicon_mmh3": [
+        1734570542
+      ],
+      "logo_phash": [
+        "3c5e3f8f0f0f3e3c"
+      ]
+    },
+    {
+      "name": "T-Mobile",
+      "domains": [
+        "t-mobile.com"
+      ],
+      "aliases": [
+        "t-mobile",
+        "tmobile"
+      ],
+      "favicon_mmh3": [
+        1141033775
+      ],
+      "logo_phash": [
+        "81a6e7a5a4a4a4c3"
+      ]
+    },
+    {
+      "name": "Vodafone",
+      "domains": [
+        "vodafone.com"
+      ],
+      "aliases": [
+        "vodafone"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "Xfinity",
+      "domains": [
+        "xfinity.com"
+      ],
+      "aliases": [
+        "xfinity",
+        "comcast"
+      ],
+      "favicon_mmh3": [
+        764562421
+      ],
+      "logo_phash": [
+        "00243c18183c2602"
+      ]
+    },
+    {
+      "name": "Airtel",
+      "domains": [
+        "airtel.in"
+      ],
+      "aliases": [
+        "airtel"
+      ],
+      "favicon_mmh3": [
+        1378345056
+      ],
+      "logo_phash": [
+        "1e3f7ff1c2322430"
+      ]
+    },
+    {
+      "name": "Jio",
+      "domains": [
+        "jio.com"
+      ],
+      "aliases": [
+        "jio"
+      ],
+      "favicon_mmh3": [
+        -2120446493
+      ],
+      "logo_phash": []
+    },
+    {
+      "name": "PlayStation",
+      "domains": [
+        "playstation.com"
+      ],
+      "aliases": [
+        "playstation",
+        "psn"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "Xbox",
+      "domains": [
+        "xbox.com"
+      ],
+      "aliases": [
+        "xbox"
+      ],
+      "favicon_mmh3": [
+        2058186678
+      ],
+      "logo_phash": [
+        "3ce7e7ffffffff7e"
+      ]
+    },
+    {
+      "name": "Epic Games",
+      "domains": [
+        "epicgames.com"
+      ],
+      "aliases": [
+        "epic games"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "Riot Games",
+      "domains": [
+        "riotgames.com"
+      ],
+      "aliases": [
+        "riot games",
+        "league of legends"
+      ],
+      "favicon_mmh3": [
+        -1267075897
+      ],
+      "logo_phash": []
+    },
+    {
+      "name": "Roblox",
+      "domains": [
+        "roblox.com"
+      ],
+      "aliases": [
+        "roblox"
+      ],
+      "favicon_mmh3": [
+        1394032364
+      ],
+      "logo_phash": [
+        "00303e3e7c7c0c00"
+      ]
+    },
+    {
+      "name": "Nintendo",
+      "domains": [
+        "nintendo.com"
+      ],
+      "aliases": [
+        "nintendo"
+      ],
+      "favicon_mmh3": [
+        -391960034
+      ],
+      "logo_phash": [
+        "183c3e3c7e7e6624"
+      ]
+    },
+    {
+      "name": "Norton",
+      "domains": [
+        "norton.com"
+      ],
+      "aliases": [
+        "norton"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "McAfee",
+      "domains": [
+        "mcafee.com"
+      ],
+      "aliases": [
+        "mcafee"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "LastPass",
+      "domains": [
+        "lastpass.com"
+      ],
+      "aliases": [
+        "lastpass"
+      ],
+      "favicon_mmh3": [
+        -347813109
+      ],
+      "logo_phash": [
+        "000001ffff010000"
+      ]
+    },
+    {
+      "name": "1Password",
+      "domains": [
+        "1password.com"
+      ],
+      "aliases": [
+        "1password"
+      ],
+      "favicon_mmh3": [
+        -1041994954
+      ],
+      "logo_phash": [
+        "3c7ee7e7e7e77e3c"
+      ]
+    },
+    {
+      "name": "NordVPN",
+      "domains": [
+        "nordvpn.com"
+      ],
+      "aliases": [
+        "nordvpn"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "ExpressVPN",
+      "domains": [
+        "expressvpn.com"
+      ],
+      "aliases": [
+        "expressvpn"
+      ],
+      "favicon_mmh3": [
+        -444615269
+      ],
+      "logo_phash": [
+        "001f3f7ffe7c7c00"
+      ]
+    },
+    {
+      "name": "Okta",
+      "domains": [
+        "okta.com"
+      ],
+      "aliases": [
+        "okta"
+      ],
+      "favicon_mmh3": [
+        -1051823172
+      ],
+      "logo_phash": [
+        "003c7e66667e3c00"
+      ]
+    },
+    {
+      "name": "Delta Air Lines",
+      "domains": [
+        "delta.com"
+      ],
+      "aliases": [
+        "delta",
+        "delta air lines"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "American Airlines",
+      "domains": [
+        "aa.com"
+      ],
+      "aliases": [
+        "american airlines"
+      ],
+      "favicon_mmh3": [
+        -585745604
+      ],
+      "logo_phash": [
+        "3f9f8fcff3e3f1f0"
+      ]
+    },
+    {
+      "name": "United Airlines",
+      "domains": [
+        "united.com"
+      ],
+      "aliases": [
+        "united airlines"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "Southwest Airlines",
+      "domains": [
+        "southwest.com"
+      ],
+      "aliases": [
+        "southwest"
+      ],
+      "favicon_mmh3": [
+        961814489
+      ],
+      "logo_phash": [
+        "8f87010081c3e7ff"
+      ]
+    },
+    {
+      "name": "British Airways",
+      "domains": [
+        "britishairways.com"
+      ],
+      "aliases": [
+        "british airways"
+      ],
+      "favicon_mmh3": [
+        -1724971950
+      ],
+      "logo_phash": []
+    },
+    {
+      "name": "Emirates",
+      "domains": [
+        "emirates.com"
+      ],
+      "aliases": [
+        "emirates"
+      ],
+      "favicon_mmh3": [
+        2066573622
+      ],
+      "logo_phash": [
+        "00006e6c4e6a0000"
+      ]
+    },
+    {
+      "name": "IndiGo",
+      "domains": [
+        "goindigo.in"
+      ],
+      "aliases": [
+        "indigo"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "Air India",
+      "domains": [
+        "airindia.com"
+      ],
+      "aliases": [
+        "air india"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "Geico",
+      "domains": [
+        "geico.com"
+      ],
+      "aliases": [
+        "geico"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "Progressive",
+      "domains": [
+        "progressive.com"
+      ],
+      "aliases": [
+        "progressive"
+      ],
+      "favicon_mmh3": [
+        -1694872912
+      ],
+      "logo_phash": [
+        "1f1f3f3f7e70e0c0"
+      ]
+    },
+    {
+      "name": "State Farm",
+      "domains": [
+        "statefarm.com"
+      ],
+      "aliases": [
+        "state farm"
+      ],
+      "favicon_mmh3": [],
+      "logo_phash": []
+    },
+    {
+      "name": "Allstate",
+      "domains": [
+        "allstate.com"
+      ],
+      "aliases": [
+        "allstate"
+      ],
+      "favicon_mmh3": [
+        1331612553
+      ],
+      "logo_phash": [
+        "0f0f1f1b3f7f63c3"
       ]
     }
   ]

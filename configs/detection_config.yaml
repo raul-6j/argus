@@ -45,6 +45,37 @@ signal_weights:
                         # typosquat check on the FINAL landing URL already
                         # fired, so it's nearly as high-confidence as
                         # typosquat itself.
+  # Phase 3 additions:
+  credential_context: 0.55  # requires a sensitive-field axis PLUS a
+                             # corroborating axis (cross-origin post or a
+                             # recently-registered domain) before triggering
+                             # at all -- see
+                             # src/detection/signals/credential_context.py.
+                             # The one exception (a crypto seed-phrase input
+                             # field, which can trigger alone) is itself rare
+                             # enough on legitimate pages to justify the
+                             # weight without corroboration.
+  platform_risk: 0.5   # never triggers alone -- only ever corroborates an
+                        # already-triggered brand_mismatch or
+                        # credential_context signal on a known free/shared
+                        # hosting platform (DEC-018's documented blind spot).
+  # Phase 6 addition:
+  semantic_content: 0.45  # social-engineering content-taxonomy match (F17).
+                           # Never triggers alone -- requires an already-
+                           # triggered brand_mismatch/credential_context or a
+                           # recently-registered domain, same corroboration
+                           # convention as platform_risk -- see
+                           # src/detection/signals/semantic_content.py.
+                           # Deliberately kept below credential_context
+                           # (0.55): matched page WORDING is weaker evidence
+                           # than an actually-harvested sensitive FIELD.
+                           # DEC-031 found fusion had no headroom for an
+                           # over-eager moderately-weighted signal (cert_intel
+                           # was the practical offender); DEC-034 fixed that
+                           # at cert_intel's own source (domain-age
+                           # corroboration) rather than here, but keeping
+                           # semantic_content's own corroboration-by-design
+                           # remains the right call regardless.
 
 # Signal names allowed to force label=phishing on their own (a "hard
 # override" trigger, independent of the model/other signals) -- reserved
@@ -57,6 +88,49 @@ signal_weights:
 hard_override_signals:
   - favicon_match
 
+# Risk bands (Phase 3, F5): a graded presentation over the fused risk_score,
+# calibrated (not invented) against data/processed/val.parquet -- see
+# scripts/calibrate_risk_bands.py and reports/risk_band_calibration.json.
+# The "suspicious" floor is deliberately kept equal to fusion_threshold
+# above, so a URL's band and its binary label never disagree: label ==
+# "phishing" iff band is suspicious/high/critical. Re-run the calibration
+# script (and update both this list and fusion_threshold together) if the
+# model is ever retrained.
+risk_bands:
+  - name: low
+    floor: 0.0
+  - name: caution
+    floor: 0.15
+  - name: suspicious
+    floor: 0.30
+  - name: high
+    floor: 0.50
+  - name: critical
+    floor: 0.75
+
+# Hosting platforms where each tenant gets a dedicated, attacker-controlled
+# subdomain -- i.e. the SAME curated list threat_intel_config.yaml's
+# `subdomain_per_tenant_platforms` uses, for the same reason (an attacker's
+# Wix/Vercel/GitHub Pages site is entirely theirs, so judging the visited
+# HOSTNAME's freshness/reputation is meaningless there; the page content is
+# what matters -- see DEC-018's documented "features measure domain
+# legitimacy, not page legitimacy" blind spot). Deliberately duplicated
+# rather than shared, since detection_config.yaml and threat_intel_config.yaml
+# are two independently-loaded configs (same pattern as feature_config.yaml's
+# feature_order vs. contract.py's FEATURE_ORDER being intentionally separate
+# lists, DEC-015) -- if you add a platform to one list, add it to the other.
+tenant_hosting_platforms:
+  - wixstudio.com
+  - weebly.com
+  - github.io
+  - blogspot.com
+  - herokuapp.com
+  - vercel.app
+  - netlify.app
+  - repl.co
+  - glitch.me
+  - 000webhostapp.com
+
 # Per-signal tunables, read by src/detection/__init__.py::run_detection.
 signal_params:
   typosquat:
@@ -64,14 +138,17 @@ signal_params:
   favicon_match:
     # Hamming distance out of 64 bits for a SOFT logo match (the exact-hash
     # hard-override path is separate and unaffected by this value). Set
-    # empirically, not guessed: measured pairwise Hamming distance across
-    # all 23 real, populated brand favicons in data/reference/brands.json
-    # (16 Jul 2026) found the CLOSEST unrelated-brand pair (Wells Fargo vs.
-    # USPS) at distance 8 -- the previous default of 8 therefore guaranteed
-    # false positives on real brand sites (confirmed live: Bank of America's
-    # own favicon soft-matched "Apple" at distance 8, Wells Fargo's matched
-    # "USPS" at distance 8, both flagged phishing on their own real domain).
-    # 3 sits with a 5-bit safety margin below that observed minimum -- if
-    # the brand reference grows, re-run the pairwise-distance check before
-    # assuming this value is still safe.
-    phash_tolerance: 3
+    # empirically, not guessed. DEC-026 (16 Jul 2026, 23 populated brands)
+    # measured the closest unrelated-brand pair at distance 8 and set this
+    # to 3 (a 5-bit margin). DEC-031 (17 Jul 2026) re-ran the same check
+    # after the brand reference grew to 166 (113 populated) and found the
+    # margin had collapsed to ZERO -- e.g. Square/Ledger/IBM all reduce to
+    # the identical degenerate all-zero hash, and Wayfair/Okta collide
+    # exactly too. 0 is therefore the strictest value this signal can take;
+    # it removes the near-miss collisions (e.g. Stripe/Kraken at distance 2)
+    # but does NOT eliminate the exact-hash collisions above -- those are
+    # genuine perceptual-hash collisions between different real icons, not
+    # a tolerance problem, and are called out as unresolved in DEC-031. If
+    # the brand reference grows again, re-run the pairwise-distance check
+    # before assuming this value is still safe.
+    phash_tolerance: 0

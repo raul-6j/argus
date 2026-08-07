@@ -23,6 +23,11 @@ _SIGNAL_PHRASES: dict[str, str] = {
     "favicon_match": "its icon matches {impersonated_brand}'s, but the site is hosted on a different domain",
     "typosquat": "its domain looks like a misspelled or look-alike version of {impersonated_brand}",
     "brand_mismatch": "the page claims to be {page_brand} but is hosted on {domain_brand}",
+    "credential_context": "it asks for sensitive information and submits it in a suspicious way",
+    "platform_risk": "it is hosted on a free/shared platform ({platform}), which hides "
+                     "the usual domain-reputation signals",
+    "semantic_content": "its wording uses social-engineering pressure tactics (e.g. urgency, "
+                        "fake security alerts, or account-verification threats)",
 }
 
 # Human phrases for a handful of the most explainable SHAP features (the
@@ -134,7 +139,11 @@ def explain_plain(
                 unique_reasons.append(reason)
         unique_reasons = unique_reasons[:_MAX_REASONS]
 
-        verb = "Flagged as phishing because" if verdict == "phishing" else "Marked as legitimate, though note that"
+        verb = (
+            "Flagged as phishing because"
+            if verdict == "phishing"
+            else "Marked as legitimate, though note that"
+        )
         return f"{verb} {', and '.join(unique_reasons)}."
     except Exception as exc:  # noqa: BLE001 - Iron Law #3
         logger.warning("explain_plain rendering failed: %s", exc)

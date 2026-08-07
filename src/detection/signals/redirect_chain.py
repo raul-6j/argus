@@ -97,7 +97,7 @@ def evaluate(
             return _neutral(start)
 
         evidence = dict(final_signal.evidence)
-        evidence["redirect_chain"] = list(page_artifacts.redirect_chain) + [final_url]
+        evidence["redirect_chain"] = [*list(page_artifacts.redirect_chain), final_url]
         evidence["requested_domain"] = requested_domain or "unknown"
         evidence["final_domain"] = final_domain
         evidence["shortener_used"] = shortener_used

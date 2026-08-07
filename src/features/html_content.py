@@ -96,7 +96,7 @@ def _safe(feature_name: str, func: Callable[[], Any]) -> Optional[Any]:
 
 def _empty_features() -> dict[str, Any]:
     """Build a result dict with every feature set to ``None``."""
-    return {key: None for key in FEATURE_KEYS}
+    return dict.fromkeys(FEATURE_KEYS)
 
 
 def _registered_domain(url: Optional[str]) -> str:
@@ -161,6 +161,24 @@ def _classify_links(soup: BeautifulSoup, base_url: Optional[str]) -> tuple[int, 
     return external, internal
 
 
+def has_password_input(soup: BeautifulSoup) -> bool:
+    """Whether the parsed page contains at least one ``<input type=password>``.
+
+    Public because the Phase-1 brand-mismatch signal
+    (``src.detection.signals.brand_mismatch``) needs exactly this test to
+    decide whether a page is asking for credentials, and previously carried
+    a byte-identical private copy of the loop below.
+
+    Args:
+        soup: An already-parsed document — the caller owns parsing, so a
+            page that has been fetched once is never re-parsed just for this.
+    """
+    return any(
+        str(inp.get("type", "")).strip().lower() == "password"
+        for inp in soup.find_all("input")
+    )
+
+
 def extract_html_features(
     html: Any, base_url: Optional[str] = None
 ) -> dict[str, Any]:
@@ -210,17 +228,8 @@ def extract_html_features(
         total = ext + intern
         return ext / total if total else 0.0
 
-    def _has_password_field() -> bool:
-        for inp in soup.find_all("input"):
-            if str(inp.get("type", "")).strip().lower() == "password":
-                return True
-        return False
-
     def _has_hidden_elements() -> bool:
-        for element in soup.find_all(style=True):
-            if _HIDDEN_STYLE_RE.search(element["style"]):
-                return True
-        return False
+        return any(_HIDDEN_STYLE_RE.search(element["style"]) for element in soup.find_all(style=True))
 
     def _has_favicon() -> bool:
         for link in soup.find_all("link"):
@@ -314,7 +323,7 @@ def extract_html_features(
         "num_external_links": num_external,
         "num_internal_links": num_internal,
         "num_forms": _safe("num_forms", lambda: len(soup.find_all("form"))),
-        "has_password_field": _safe("has_password_field", _has_password_field),
+        "has_password_field": _safe("has_password_field", lambda: has_password_input(soup)),
         "has_iframe": _safe("has_iframe", lambda: len(soup.find_all("iframe")) > 0),
         "has_hidden_elements": _safe("has_hidden_elements", _has_hidden_elements),
         "num_images": _safe("num_images", lambda: len(soup.find_all("img"))),

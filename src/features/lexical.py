@@ -181,7 +181,7 @@ def _is_ip_address(hostname: Optional[str]) -> bool:
 
 def _empty_features() -> dict[str, Any]:
     """Build a result dict with every feature set to ``None``."""
-    return {key: None for key in FEATURE_KEYS}
+    return dict.fromkeys(FEATURE_KEYS)
 
 
 def extract_lexical_features(url: Any) -> dict[str, Any]:

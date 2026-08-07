@@ -40,7 +40,7 @@ def test_normal_url() -> None:
     assert feats["domain"] == "example.com"
     assert feats["has_suspicious_keywords"] is True  # login/secure/account
     assert feats["num_hyphens_in_hostname"] == 0
-    assert 0.0 < feats["url_entropy"]
+    assert feats["url_entropy"] > 0.0
     assert 0.0 <= feats["digit_ratio_in_url"] <= 1.0
 
 

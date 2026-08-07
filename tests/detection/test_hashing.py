@@ -29,7 +29,7 @@ class TestMmh3_32:
 
     def test_handles_various_lengths(self):
         """Exercises the tail-byte branches (0/1/2/3 remainder bytes)."""
-        for n in range(0, 12):
+        for n in range(12):
             data = bytes(range(n))
             h = mmh3_32(data)
             assert isinstance(h, int)

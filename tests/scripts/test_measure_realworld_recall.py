@@ -100,8 +100,111 @@ class TestReportShape:
             "generated_at", "eval_feed", "excluded_prefilter_urls", "total_sampled", "reachable",
             "reachability_rate", "model_only_recall", "fused_recall", "recall_delta",
             "control_set_size", "model_only_fp_rate", "fused_fp_rate", "note",
+            # Phase 3, F10:
+            "recall_by_hosting_category", "recall_by_signal", "confidence_stats",
         }
         assert expected_keys.issubset(report.keys())
+
+    def test_confidence_stats_is_none_when_nothing_reachable(self, tmp_path):
+        from scripts import measure_realworld_recall as m
+
+        eval_feed = tmp_path / "eval.csv"
+        pd.DataFrame({"url": ["https://a-test-url.example"], "verified": ["yes"], "online": ["yes"]}).to_csv(
+            eval_feed, index=False
+        )
+        report = m.run(eval_feed, sample_size=5, control_sample_size=1)
+        assert report["confidence_stats"] == {"mean": None, "stdev": None, "min": None, "max": None}
+
+
+class TestHostingCategory:
+    def test_matches_apex_hostname(self):
+        from scripts import measure_realworld_recall as m
+
+        assert m._hosting_category("https://wixstudio.com/x", frozenset({"wixstudio.com"})) == "tenant_platform"
+
+    def test_matches_subdomain(self):
+        from scripts import measure_realworld_recall as m
+
+        assert (
+            m._hosting_category("https://attacker.wixstudio.com", frozenset({"wixstudio.com"}))
+            == "tenant_platform"
+        )
+
+    def test_non_platform_is_standalone(self):
+        from scripts import measure_realworld_recall as m
+
+        assert m._hosting_category("https://random-phish.tk", frozenset({"wixstudio.com"})) == "standalone"
+
+    def test_empty_platform_list_is_always_standalone(self):
+        from scripts import measure_realworld_recall as m
+
+        assert m._hosting_category("https://wixstudio.com", frozenset()) == "standalone"
+
+    def test_unparseable_url_does_not_crash(self):
+        from scripts import measure_realworld_recall as m
+
+        assert m._hosting_category("not a url", frozenset({"wixstudio.com"})) == "standalone"
+
+
+class TestRecallBreakdown:
+    def test_single_valued_grouping(self):
+        from scripts import measure_realworld_recall as m
+
+        results = [
+            {"reachable": True, "hosting_category": "standalone", "model_only_label": "phishing", "fused_label": "phishing"},
+            {"reachable": True, "hosting_category": "standalone", "model_only_label": "legitimate", "fused_label": "phishing"},
+            {"reachable": True, "hosting_category": "tenant_platform", "model_only_label": "legitimate", "fused_label": "legitimate"},
+            {"reachable": False, "hosting_category": "tenant_platform", "model_only_label": "legitimate", "fused_label": "legitimate"},
+        ]
+        breakdown = m._recall_breakdown(results, "hosting_category")
+        assert breakdown["standalone"]["n"] == 2
+        assert breakdown["standalone"]["model_only_recall"] == 0.5
+        assert breakdown["standalone"]["fused_recall"] == 1.0
+        assert breakdown["tenant_platform"]["n"] == 1  # unreachable row excluded
+
+    def test_multi_valued_grouping_with_none_bucket(self):
+        from scripts import measure_realworld_recall as m
+
+        results = [
+            {"reachable": True, "triggered_signals": ["typosquat", "brand_mismatch"], "model_only_label": "legitimate", "fused_label": "phishing"},
+            {"reachable": True, "triggered_signals": [], "model_only_label": "phishing", "fused_label": "phishing"},
+        ]
+        breakdown = m._recall_breakdown(results, "triggered_signals", multi_valued=True)
+        assert set(breakdown.keys()) == {"typosquat", "brand_mismatch", "none"}
+        assert breakdown["typosquat"]["n"] == 1
+        assert breakdown["none"]["n"] == 1
+
+    def test_empty_results_yields_empty_breakdown(self):
+        from scripts import measure_realworld_recall as m
+
+        assert m._recall_breakdown([], "hosting_category") == {}
+
+
+class TestConfidenceStats:
+    def test_computes_mean_and_stdev(self):
+        from scripts import measure_realworld_recall as m
+
+        results = [
+            {"reachable": True, "model_proba": 0.2},
+            {"reachable": True, "model_proba": 0.4},
+            {"reachable": False, "model_proba": 0.9},  # excluded
+        ]
+        stats = m._confidence_stats(results)
+        assert stats["mean"] == pytest.approx(0.3)
+        assert stats["min"] == 0.2
+        assert stats["max"] == 0.4
+
+    def test_single_reachable_result_has_zero_stdev(self):
+        from scripts import measure_realworld_recall as m
+
+        stats = m._confidence_stats([{"reachable": True, "model_proba": 0.5}])
+        assert stats["stdev"] == 0.0
+
+    def test_no_reachable_results_yields_all_none(self):
+        from scripts import measure_realworld_recall as m
+
+        stats = m._confidence_stats([{"reachable": False, "model_proba": 0.5}])
+        assert stats == {"mean": None, "stdev": None, "min": None, "max": None}
 
     def test_unreachable_urls_yield_none_recall_not_a_crash(self, tmp_path):
         """Every URL fails to fetch (mocked) -- recall is None (no reachable

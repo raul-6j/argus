@@ -6,7 +6,6 @@ from unittest import mock
 
 from src.detection import run_detection
 from src.detection.brand_reference import Brand, BrandIndex
-from src.detection.types import RiskSignal
 from src.features.page_artifacts import PageArtifacts
 
 MODULE = "src.detection"
@@ -21,8 +20,12 @@ _CONFIG = {
         "brand_mismatch": 0.8,
         "cert_intel": 0.4,
         "redirect_chain": 0.7,
+        "credential_context": 0.55,
+        "platform_risk": 0.5,
+        "semantic_content": 0.45,
     },
     "hard_override_signals": ["favicon_match"],
+    "tenant_hosting_platforms": ["wixstudio.com", "vercel.app"],
     "signal_params": {
         "typosquat": {"max_edit_distance": 2},
         "favicon_match": {"phash_tolerance": 3},
@@ -62,6 +65,24 @@ class TestNoPageArtifacts:
         assert "typosquat" in names
         assert "favicon_match" not in names
         assert "brand_mismatch" not in names
+        assert "credential_context" not in names
+        assert "semantic_content" not in names
+
+    def test_platform_risk_runs_but_stays_neutral_without_page_artifacts(self):
+        """platform_risk is hostname-only, so it still runs when there's no
+        page fetch -- but it can never trigger without a corroborating
+        page-content signal (brand_mismatch/credential_context), both of
+        which require a successful fetch."""
+        v = run_detection(
+            "https://attacker.wixstudio.com",
+            model_proba=0.1,
+            page_artifacts=None,
+            html_features=None,
+            brand_index=_BRAND_INDEX,
+            config=_CONFIG,
+        )
+        platform_sig = next(s for s in v.signals if s.name == "platform_risk")
+        assert platform_sig.triggered is False
 
     def test_typosquat_trigger_reflected_in_verdict(self):
         v = run_detection(
@@ -88,13 +109,20 @@ class TestFailedPageFetch:
             config=_CONFIG,
         )
         names = [s.name for s in v.signals]
-        assert names == ["typosquat"]
+        # platform_risk still runs (it's hostname-only) but stays neutral --
+        # example.com isn't a listed tenant-hosting platform, and even if it
+        # were, it has nothing to corroborate since brand_mismatch/
+        # credential_context never ran without a successful fetch.
+        assert names == ["typosquat", "platform_risk"]
+        platform_sig = next(s for s in v.signals if s.name == "platform_risk")
+        assert platform_sig.triggered is False
 
 
 class TestSuccessfulPageFetch:
-    def test_all_five_signals_run(self):
-        """Phase 1's three page-dependent signals plus Phase 2's A4/A5 --
-        all five gated on a successful page fetch, all run together."""
+    def test_all_eight_signals_run(self):
+        """Phase 1's three page-dependent signals, Phase 2's A4/A5, Phase
+        3's F3/F4, and Phase 6's F17 -- all eight run together on a
+        successful fetch."""
         html = "<html><head><title>Just a page</title></head><body>hello</body></html>"
         artifacts = PageArtifacts(requested_url="x", html=html, final_url="https://example.com")
         v = run_detection(
@@ -108,7 +136,51 @@ class TestSuccessfulPageFetch:
         names = {s.name for s in v.signals}
         assert names == {
             "typosquat", "favicon_match", "brand_mismatch", "cert_intel", "redirect_chain",
+            "credential_context", "platform_risk", "semantic_content",
         }
+
+    def test_semantic_content_triggers_when_corroborated_by_brand_mismatch(self):
+        html = (
+            "<html><head><title>PayPal</title></head>"
+            "<body><p>Your account will be suspended. Act now.</p>"
+            "<input type=password></body></html>"
+        )
+        artifacts = PageArtifacts(requested_url="x", html=html, final_url="https://attacker.com")
+        v = run_detection(
+            "https://attacker.com",
+            model_proba=0.1,
+            page_artifacts=artifacts,
+            html_features={},
+            brand_index=_BRAND_INDEX,
+            config=_CONFIG,
+        )
+        brand_sig = next(s for s in v.signals if s.name == "brand_mismatch")
+        assert brand_sig.triggered is True
+        semantic_sig = next(s for s in v.signals if s.name == "semantic_content")
+        assert semantic_sig.triggered is True
+        assert "urgency_threat" in semantic_sig.evidence["matched_categories"]
+
+    def test_platform_risk_triggers_when_corroborated_by_brand_mismatch(self):
+        html = (
+            "<html><head><title>PayPal</title></head>"
+            "<body><input type=password></body></html>"
+        )
+        artifacts = PageArtifacts(
+            requested_url="x", html=html, final_url="https://attacker.wixstudio.com"
+        )
+        v = run_detection(
+            "https://attacker.wixstudio.com",
+            model_proba=0.1,
+            page_artifacts=artifacts,
+            html_features={},
+            brand_index=_BRAND_INDEX,
+            config=_CONFIG,
+        )
+        brand_sig = next(s for s in v.signals if s.name == "brand_mismatch")
+        assert brand_sig.triggered is True
+        platform_sig = next(s for s in v.signals if s.name == "platform_risk")
+        assert platform_sig.triggered is True
+        assert platform_sig.evidence["platform"] == "wixstudio.com"
 
 
 class TestSignalIsolation:

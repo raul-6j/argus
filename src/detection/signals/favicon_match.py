@@ -44,11 +44,11 @@ logger = logging.getLogger(__name__)
 _SIGNAL_NAME = "favicon_match"
 _FAVICON_FETCH_TIMEOUT: float = 3.0
 _MAX_FAVICON_BYTES: int = 512 * 1024  # 512 KiB — favicons are always tiny
-_DEFAULT_PHASH_TOLERANCE = 3  # Hamming distance out of 64 bits — see
+_DEFAULT_PHASH_TOLERANCE = 0  # Hamming distance out of 64 bits — see
 # configs/detection_config.yaml's phash_tolerance comment for the empirical
-# basis: 8 (the previous value) sat exactly at the closest observed
-# distance between two *unrelated* real brand favicons and produced live
-# false positives; 3 has a 5-bit safety margin below that measured minimum.
+# basis (DEC-026, DEC-031): the measured minimum distance between two
+# *unrelated* real brand favicons collapsed to 0 once the brand reference
+# grew to 166 brands, so 0 is the strictest value this signal supports.
 _EXACT_MATCH_SCORE = 0.97
 
 

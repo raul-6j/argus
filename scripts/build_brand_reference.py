@@ -37,8 +37,8 @@ from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.detection.hashing import average_hash, mmh3_32  # noqa: E402
-from src.utils.ssrf import is_safe_fetch_url  # noqa: E402
+from src.detection.hashing import average_hash, mmh3_32
+from src.utils.ssrf import is_safe_fetch_url
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger("build_brand_reference")

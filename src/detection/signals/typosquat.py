@@ -16,6 +16,13 @@ most specific technique):
        real domains (e.g. ``paypal.tk`` vs. the real ``paypal.com``).
     3. Edit distance — a small (1-2 character) Damerau-Levenshtein edit
        away from a brand's root label (e.g. ``paypaI.com``, ``paypal1.com``).
+       Requires both roots to be at least ``_MIN_EDIT_DISTANCE_ROOT_LENGTH``
+       characters (DEC-031/034) — below that, a distance of 1-2 is too large
+       a fraction of the string to distinguish a typosquat from two
+       unrelated short brand names (e.g. ``usps.com`` vs. ``UPS``, both
+       real, distance 1). Not previously guarded; only became visible once
+       the brand reference grew to 166 entries and produced frequent
+       false positives between unrelated brands' own real domains.
     4. Brand-in-subdomain — the brand's name/alias appears as a full
        subdomain label while the registered domain is unrelated (e.g.
        ``paypal.attacker.com``).
@@ -75,6 +82,21 @@ _CONFUSABLES: dict[str, str] = {
 
 _MIN_BRAND_ROOT_LENGTH = 3
 _MIN_ALIAS_COMBOSQUAT_LENGTH = 4
+
+# DEC-031/034: the edit-distance technique specifically needs a stricter
+# floor than _MIN_BRAND_ROOT_LENGTH. At 166 brands, several genuine,
+# unrelated short root labels (3-4 chars) sit within max_edit_distance=2 of
+# each other -- e.g. "usps"/"ups" (distance 1), "dhl"/"aol" (2),
+# "ebay"/"etsy" (2), "chase"/"cash" (2), "hsbc"/"sbi" (2) -- because for a
+# 3-4 character string, an edit distance of 1-2 is 25-65% of the string,
+# not a small typo. Homograph/tld_swap/brand-in-subdomain/combosquat are
+# exact- or substring-anchored and don't share this failure mode, so only
+# the fuzzy edit-distance technique is restricted here. This necessarily
+# narrows edit-distance coverage for short-named brands (e.g. a genuine
+# "irss.com" typosquat of a 3-letter brand would no longer be caught by
+# this technique alone) -- a deliberate trade-off, not an oversight; see
+# DEC-034.
+_MIN_EDIT_DISTANCE_ROOT_LENGTH = 5
 
 
 def _normalize_confusables(text: str) -> str:
@@ -151,7 +173,9 @@ def _neutral(start: float) -> RiskSignal:
     )
 
 
-def _trigger(technique: str, brand_name: str, brand_domain: str, score: float, start: float, **extra) -> RiskSignal:
+def _trigger(
+    technique: str, brand_name: str, brand_domain: str, score: float, start: float, **extra
+) -> RiskSignal:
     evidence = {"impersonated_brand": brand_name, "brand_domain": brand_domain, "technique": technique}
     evidence.update(extra)
     return RiskSignal(
@@ -210,7 +234,12 @@ def evaluate(url: str, brand_index: "BrandIndex", max_edit_distance: int = 2) ->
                 if domain_root_raw == brand_root and domain != brand_domain:
                     return _trigger("tld_swap", brand.name, brand_domain, 0.75, start)
 
-                # 3) Edit distance on the normalized root.
+                # 3) Edit distance on the normalized root. Guarded against
+                #    short-root collisions (DEC-031/034) -- see
+                #    _MIN_EDIT_DISTANCE_ROOT_LENGTH above.
+                shorter_root = min(len(domain_root_normalized), len(brand_root_normalized))
+                if shorter_root < _MIN_EDIT_DISTANCE_ROOT_LENGTH:
+                    continue
                 distance = _damerau_levenshtein(domain_root_normalized, brand_root_normalized)
                 if 0 < distance <= max_edit_distance:
                     return _trigger(

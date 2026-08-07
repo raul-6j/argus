@@ -74,6 +74,60 @@ class TestGuards:
         sig = typosquat.evaluate("https://hpx.com", _index())
         assert sig.triggered is False
 
+
+class TestEditDistanceShortRootGuard:
+    """DEC-031/034: short root labels (3-4 chars) false-positive against
+    each other at max_edit_distance=2 once the brand reference is large
+    enough to contain many such short, unrelated names. All six pairs below
+    are the exact collisions DEC-031 found live at 166 brands."""
+
+    def _brands(self) -> BrandIndex:
+        return BrandIndex(
+            brands=(
+                Brand(name="UPS", domains=("ups.com",), aliases=("ups",)),
+                Brand(name="OKX", domains=("okx.com",), aliases=("okx",)),
+                Brand(name="AOL", domains=("aol.com",), aliases=("aol",)),
+                Brand(name="Etsy", domains=("etsy.com",), aliases=("etsy",)),
+                Brand(name="Cash App", domains=("cash.app",), aliases=("cash app", "cashapp")),
+                Brand(
+                    name="State Bank of India",
+                    domains=("sbi.co.in",),
+                    aliases=("sbi", "state bank of india"),
+                ),
+            )
+        )
+
+    def test_usps_no_longer_collides_with_ups(self):
+        sig = typosquat.evaluate("https://usps.com", self._brands(), max_edit_distance=2)
+        assert sig.triggered is False
+
+    def test_x_no_longer_collides_with_okx(self):
+        sig = typosquat.evaluate("https://x.com", self._brands(), max_edit_distance=2)
+        assert sig.triggered is False
+
+    def test_dhl_no_longer_collides_with_aol(self):
+        sig = typosquat.evaluate("https://dhl.com", self._brands(), max_edit_distance=2)
+        assert sig.triggered is False
+
+    def test_ebay_no_longer_collides_with_etsy(self):
+        sig = typosquat.evaluate("https://ebay.com", self._brands(), max_edit_distance=2)
+        assert sig.triggered is False
+
+    def test_chase_no_longer_collides_with_cash_app(self):
+        sig = typosquat.evaluate("https://chase.com", self._brands(), max_edit_distance=2)
+        assert sig.triggered is False
+
+    def test_hsbc_no_longer_collides_with_sbi(self):
+        sig = typosquat.evaluate("https://hsbc.com", self._brands(), max_edit_distance=2)
+        assert sig.triggered is False
+
+    def test_long_root_edit_distance_still_triggers(self):
+        """The guard is scoped to short roots only -- genuine typosquats of
+        long-enough brand names must still be caught (regression guard for
+        TestEditDistance.test_one_char_substitution_triggers)."""
+        sig = typosquat.evaluate("https://paypaI.com", _index(), max_edit_distance=2)
+        assert sig.triggered is True
+
     def test_empty_brand_index_is_neutral(self):
         sig = typosquat.evaluate("https://paypal-secure.com", BrandIndex(brands=()))
         assert sig.triggered is False

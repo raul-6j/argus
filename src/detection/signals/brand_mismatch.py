@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Any, Optional
 from bs4 import BeautifulSoup
 
 from src.detection.types import RiskSignal
+from src.features.html_content import has_password_input
 from src.utils.domains import registered_domain
 
 if TYPE_CHECKING:
@@ -85,10 +86,7 @@ def _has_credential_context(html: str) -> bool:
         soup = BeautifulSoup(html, "lxml")
     except Exception:  # noqa: BLE001
         return False
-    for inp in soup.find_all("input"):
-        if str(inp.get("type", "")).strip().lower() == "password":
-            return True
-    return False
+    return has_password_input(soup)
 
 
 def _brand_mentioned(tokens: set[str], brand: "Brand") -> bool:

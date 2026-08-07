@@ -22,7 +22,16 @@ from typing import Any, Optional
 
 from src.detection import fusion
 from src.detection.brand_reference import BrandIndex
-from src.detection.signals import brand_mismatch, cert_intel, favicon_match, redirect_chain, typosquat
+from src.detection.signals import (
+    brand_mismatch,
+    cert_intel,
+    credential_context,
+    favicon_match,
+    platform_risk,
+    redirect_chain,
+    semantic_content,
+    typosquat,
+)
 from src.detection.types import FusedVerdict, RiskSignal
 from src.features.page_artifacts import PageArtifacts
 
@@ -103,7 +112,13 @@ def run_detection(
         )
     )
 
-    favicon_signal: Optional[RiskSignal] = None
+    # Every page-dependent signal lives in this one block. `corroborators`
+    # is computed partway through it (rather than the block being split in
+    # two around that computation, as it was originally) because the
+    # signals after it are the ones that consume it — the ordering of
+    # appends, and so of the `signals` list in the API response, is
+    # unchanged.
+    corroborators: list[RiskSignal] = []
     if page_artifacts is not None and page_artifacts.ok:
         favicon_params = signal_params.get("favicon_match", {})
         favicon_signal = _run_signal_safely(
@@ -124,25 +139,52 @@ def run_detection(
         )
         signals.append(favicon_signal)
 
+        brand_mismatch_signal = _run_signal_safely(
+            "brand_mismatch",
+            lambda: brand_mismatch.evaluate(
+                page_artifacts, url, brand_index, favicon_signal, html_features
+            ),
+        )
+        signals.append(brand_mismatch_signal)
+
+        # F4 (Phase 3) — credential-harvesting taxonomy. Independent of
+        # brand_index (works even when the brand reference is empty), so it
+        # runs on any successfully-fetched page regardless of brand match.
+        credential_context_signal = _run_signal_safely(
+            "credential_context",
+            lambda: credential_context.evaluate(page_artifacts, html_features),
+        )
+        signals.append(credential_context_signal)
+
+        # An already-triggered brand-identity signal corroborates each of
+        # the three signals below (semantic_content, cert_intel per DEC-034,
+        # and platform_risk after this block).
+        corroborators = [
+            s for s in (brand_mismatch_signal, credential_context_signal) if s is not None
+        ]
+
+        # F17 (Phase 6) — social-engineering content taxonomy. A pure
+        # corroborator (see semantic_content.py's module docstring): it can
+        # only ever trigger alongside an already-triggered brand_mismatch/
+        # credential_context, or a recently-registered domain, so it never
+        # independently contributes fusion weight to a verdict nothing else
+        # already flagged.
         signals.append(
             _run_signal_safely(
-                "brand_mismatch",
-                lambda: brand_mismatch.evaluate(
-                    page_artifacts, url, brand_index, favicon_signal, html_features
-                ),
+                "semantic_content",
+                lambda: semantic_content.evaluate(page_artifacts, corroborators, html_features),
             )
         )
 
-    # A4 (Phase 2) — reuses the TLS cert already captured by the shared
-    # fetch; no extra connection. A5 (Phase 2) — reuses the redirect chain
-    # already captured by the same fetch; no extra fetch either. Both are
-    # page-dependent, so both require a successful fetch, same as
-    # favicon_match/brand_mismatch above.
-    if page_artifacts is not None and page_artifacts.ok:
+        # A4 (Phase 2) — reuses the TLS cert already captured by the shared
+        # fetch; no extra connection. A5 (Phase 2) — reuses the redirect
+        # chain already captured by the same fetch; no extra fetch either.
         signals.append(
             _run_signal_safely(
                 "cert_intel",
-                lambda: cert_intel.evaluate(page_artifacts, url, brand_index),
+                lambda: cert_intel.evaluate(
+                    page_artifacts, url, brand_index, html_features, corroborators
+                ),
             )
         )
         redirect_params = signal_params.get("redirect_chain", {})
@@ -157,5 +199,20 @@ def run_detection(
                 ),
             )
         )
+
+    # F3 (Phase 3) — free/shared-hosting-platform risk awareness. Runs
+    # regardless of page-fetch success (it's hostname-only), but only ever
+    # triggers when it can corroborate an already-triggered brand_mismatch
+    # or credential_context signal -- both of which require a successful
+    # fetch, so in practice this is a safe no-op whenever the fetch failed.
+    tenant_hosting_platforms = frozenset(
+        p.lower() for p in config.get("tenant_hosting_platforms", [])
+    )
+    signals.append(
+        _run_signal_safely(
+            "platform_risk",
+            lambda: platform_risk.evaluate(url, tenant_hosting_platforms, corroborators),
+        )
+    )
 
     return fusion.fuse(model_proba, signals, config)

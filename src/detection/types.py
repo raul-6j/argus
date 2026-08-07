@@ -8,7 +8,52 @@ them without a circular dependency.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Optional
+
+# Default risk-band boundaries (Phase 3, F5), used when
+# detection_config.yaml's own ``risk_bands`` list is absent -- calibrated
+# against data/processed/val.parquet, not invented (see
+# scripts/calibrate_risk_bands.py and reports/risk_band_calibration.json).
+# The "suspicious" floor intentionally equals fusion.DEFAULT_FUSION_THRESHOLD
+# (0.30, DEC-017) so a verdict's risk_band and its binary label never
+# disagree: label == "phishing" iff band is suspicious/high/critical.
+DEFAULT_RISK_BANDS: tuple[tuple[str, float], ...] = (
+    ("low", 0.0),
+    ("caution", 0.15),
+    ("suspicious", 0.30),
+    ("high", 0.50),
+    ("critical", 0.75),
+)
+
+
+def risk_band_for_score(
+    risk_score: float, bands: Optional[list[dict[str, Any]]] = None
+) -> str:
+    """Map a ``risk_score`` (0.0-1.0) to a named risk band.
+
+    Args:
+        risk_score: The fused (or model-only) phishing-likelihood score.
+        bands: ``detection_config.yaml``'s ``risk_bands`` list
+            (``[{"name": ..., "floor": ...}, ...]``, ascending floors), or
+            ``None``/empty to use :data:`DEFAULT_RISK_BANDS`.
+
+    Returns:
+        The name of the highest band whose floor is ``<= risk_score``
+        (``"low"`` if ``risk_score`` is below every floor, defensively).
+    """
+    ordered = (
+        [(b["name"], float(b["floor"])) for b in bands] if bands else list(DEFAULT_RISK_BANDS)
+    )
+    if not ordered:
+        ordered = list(DEFAULT_RISK_BANDS)
+
+    band_name = ordered[0][0]
+    for name, floor in ordered:
+        if risk_score >= floor:
+            band_name = name
+        else:
+            break
+    return band_name
 
 
 @dataclass
@@ -46,7 +91,8 @@ class RiskSignal:
     weight: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
-        """Shape matching ``RiskSignalSchema`` (the public API contract)."""
+        """Shape matching each ``signals[]`` entry in the public API contract
+        (see ``docs/API.md``)."""
         return {
             "name": self.name,
             "triggered": self.triggered,

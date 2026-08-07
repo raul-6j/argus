@@ -23,8 +23,10 @@ import threading
 import time
 from concurrent.futures import (
     ThreadPoolExecutor,
-    TimeoutError as FuturesTimeoutError,
     as_completed,
+)
+from concurrent.futures import (
+    TimeoutError as FuturesTimeoutError,
 )
 from datetime import datetime, timezone
 from typing import Any, Callable, Iterable, Optional
@@ -85,7 +87,7 @@ _DATE_FORMATS: tuple[str, ...] = (
 
 def _all_none() -> dict[str, Any]:
     """Build a result dict with every feature set to ``None``."""
-    return {key: None for key in DOMAIN_INTEL_KEYS}
+    return dict.fromkeys(DOMAIN_INTEL_KEYS)
 
 
 def _coerce_datetime(value: Any, pick: Callable[[list], Any]) -> Optional[datetime]:
