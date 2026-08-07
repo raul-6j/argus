@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from src.detection.types import DEFAULT_RISK_BANDS, risk_band_for_score
+import pytest
+
+from src.detection.types import DEFAULT_RISK_BANDS, RiskSignal, risk_band_for_score
 
 
 class TestRiskBandForScoreDefaults:
@@ -46,3 +48,26 @@ class TestRiskBandForScoreCustomConfig:
 
     def test_none_bands_falls_back_to_defaults(self):
         assert risk_band_for_score(0.9, None) == "critical"
+
+
+class TestRiskSignalDirectionInvariant:
+    """DEC-039: the 'triggered implies not neutral' rule is enforced at
+    construction, not merely documented in fusion.py (audit H-1, second part).
+    """
+
+    def test_triggered_neutral_signal_is_rejected(self):
+        with pytest.raises(ValueError, match="never"):
+            RiskSignal(name="typosquat", triggered=True, score=0.5, direction="neutral")
+
+    def test_unknown_direction_is_rejected(self):
+        with pytest.raises(ValueError, match="direction must be one of"):
+            RiskSignal(name="typosquat", triggered=True, score=0.5, direction="suspicious")
+
+    @pytest.mark.parametrize("direction", ["phishing", "legitimate"])
+    def test_triggered_signal_with_a_real_direction_is_accepted(self, direction):
+        signal = RiskSignal(name="typosquat", triggered=True, score=0.5, direction=direction)
+        assert signal.direction == direction
+
+    def test_untriggered_neutral_signal_is_the_normal_case(self):
+        signal = RiskSignal(name="typosquat", triggered=False, score=0.0, direction="neutral")
+        assert not signal.triggered

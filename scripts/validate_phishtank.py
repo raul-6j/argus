@@ -62,7 +62,14 @@ def _predict_one(url: str, pipeline, threshold: float) -> dict:
             "url": url,
             "reachable": "html" in fv.components_run,
             "domain_intel_ran": "domain_intel" in fv.components_run,
+            # DEC-040 split what used to be one muddled counter: `approximated`
+            # now means "measured via a proxy" (a fixed property of the
+            # derivation), while `unavailable` means "not measurable for this
+            # URL" — the number that actually varies per URL and explains a
+            # weak score.
             "n_features_approximated": len(model_input.approximated),
+            "n_features_unavailable": len(model_input.unavailable),
+            "evidence_ratio": round(model_input.evidence_ratio, 4),
             "proba_phishing": float(proba),
             "predicted_phishing": predicted_phishing,
             "error": None,
@@ -74,6 +81,8 @@ def _predict_one(url: str, pipeline, threshold: float) -> dict:
             "reachable": False,
             "domain_intel_ran": False,
             "n_features_approximated": None,
+            "n_features_unavailable": None,
+            "evidence_ratio": None,
             "proba_phishing": None,
             "predicted_phishing": None,
             "error": str(exc),

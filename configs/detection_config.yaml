@@ -26,11 +26,27 @@ brand_reference_path: data/reference/brands.json
 # this value too.
 fusion_threshold: 0.30
 
-# Relative weights in the fusion weighted-sum (src/detection/fusion.py).
-# `model` is the ML model's own contribution; a signal's weight only
-# applies when that signal actually triggers. Values are relative, not
-# required to sum to 1.0 -- fuse() normalizes by the total weight that
-# actually contributed to a given verdict.
+# Per-signal reliabilities for the fusion combiner (src/detection/fusion.py).
+# `model` is the ML model's own contribution; a signal's weight only applies
+# when that signal actually triggers.
+#
+# DEC-039 replaced the weighted MEAN with a monotone noisy-OR, so these
+# numbers changed meaning slightly -- they are no longer *relative* shares
+# normalized by a running total, but absolute per-signal reliabilities in
+# [0.0, 1.0]: `w` is the fraction of a signal's own score that it alone is
+# allowed to contribute, via a (1 - w*score) factor. The intuition the tuned
+# values were chosen under ("how far may this signal alone move a verdict?")
+# is unchanged, which is why they carry over as-is; values are clamped to
+# [0, 1] by fuse(), and every value below already satisfies that.
+#
+# Keep `model: 1.0`. It is what makes "no signal triggered" reduce to exactly
+# model_proba, preserving DEC-A's model-only-equivalence invariant against
+# fusion_threshold above.
+#
+# Note that noisy-OR accumulates: unlike the old mean, several mid-weight
+# signals agreeing now compound rather than averaging each other down. If a
+# future retune is needed, lower individual weights or raise
+# fusion_threshold -- do NOT reintroduce averaging (see DEC-039 for why).
 signal_weights:
   model: 1.0
   typosquat: 0.6

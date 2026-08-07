@@ -56,6 +56,10 @@ def risk_band_for_score(
     return band_name
 
 
+#: The only directions a signal may declare (see RiskSignal.__post_init__).
+_VALID_DIRECTIONS = frozenset({"phishing", "legitimate", "neutral"})
+
+
 @dataclass
 class RiskSignal:
     """One detection signal's verdict for a single URL/page.
@@ -66,7 +70,12 @@ class RiskSignal:
         triggered: Whether the signal fired.
         score: Signal-local phishing likelihood, ``0.0``-``1.0``. Meaningless
             when ``triggered`` is ``False`` (always ``0.0``).
-        direction: ``"phishing"``, ``"legitimate"``, or ``"neutral"``.
+        direction: ``"phishing"``, ``"legitimate"``, or ``"neutral"``. A
+            *triggered* signal must be ``"phishing"`` or ``"legitimate"`` —
+            "triggered but neutral" is meaningless and is rejected by
+            :meth:`__post_init__` (DEC-039; previously only a comment in
+            ``fusion.py``, where a triggered-neutral signal would have
+            silently diluted the weighted mean).
         evidence: Signal-specific supporting detail (e.g.
             ``{"impersonated_brand": "PayPal", "distance": 1}``), rendered
             to the API response and consumed by the plain-language explainer.
@@ -89,6 +98,24 @@ class RiskSignal:
     is_hard_override: bool = False
     latency_ms: float = 0.0
     weight: float = 0.0
+
+    def __post_init__(self) -> None:
+        """Enforce the direction invariants the fusion layer relies on.
+
+        Raises:
+            ValueError: If ``direction`` is not one of the three known values,
+                or if a ``triggered`` signal is ``"neutral"``.
+        """
+        if self.direction not in _VALID_DIRECTIONS:
+            raise ValueError(
+                f"RiskSignal {self.name!r}: direction must be one of "
+                f"{sorted(_VALID_DIRECTIONS)}, got {self.direction!r}"
+            )
+        if self.triggered and self.direction == "neutral":
+            raise ValueError(
+                f"RiskSignal {self.name!r}: a triggered signal must have "
+                f'direction "phishing" or "legitimate", never "neutral"'
+            )
 
     def to_dict(self) -> dict[str, Any]:
         """Shape matching each ``signals[]`` entry in the public API contract
