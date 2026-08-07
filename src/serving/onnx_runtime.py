@@ -29,7 +29,7 @@ class Predictor(Protocol):
     wrapper satisfy -- callers depend on this, not on which backend is
     actually in use."""
 
-    def predict_proba(self, X: Any) -> np.ndarray: ...  # noqa: E704
+    def predict_proba(self, X: Any) -> np.ndarray: ...
 
 
 class OnnxPredictor:
@@ -95,5 +95,7 @@ def load_predictor(
         logger.info("Loaded ONNX predictor from %s.", onnx_path)
         return predictor
     except Exception as exc:  # noqa: BLE001 - ONNX is an optimization, never a hard dependency
-        logger.warning("Failed to load ONNX predictor from %s: %s -- falling back to sklearn.", onnx_path, exc)
+        logger.warning(
+            "Failed to load ONNX predictor from %s: %s -- falling back to sklearn.", onnx_path, exc
+        )
         return sklearn_pipeline

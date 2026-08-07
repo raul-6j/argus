@@ -6,7 +6,7 @@ from pathlib import Path
 
 import yaml
 
-from src.models.contract import FEATURE_ORDER, ModelInput, VALID_FEATURE_VALUES
+from src.models.contract import FEATURE_ORDER, VALID_FEATURE_VALUES, ModelInput
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -29,11 +29,11 @@ def test_feature_order_is_18_features():
 
 
 def test_valid_feature_values_is_uci_scale():
-    assert VALID_FEATURE_VALUES == {-1, 0, 1}
+    assert {-1, 0, 1} == VALID_FEATURE_VALUES
 
 
 def test_model_input_to_vector_preserves_order():
-    values = {name: 1 for name in FEATURE_ORDER}
+    values = dict.fromkeys(FEATURE_ORDER, 1)
     values[FEATURE_ORDER[0]] = -1
     model_input = ModelInput(values=values)
     vector = model_input.to_vector()
@@ -43,6 +43,6 @@ def test_model_input_to_vector_preserves_order():
 
 
 def test_model_input_default_approximated_is_empty():
-    values = {name: 1 for name in FEATURE_ORDER}
+    values = dict.fromkeys(FEATURE_ORDER, 1)
     model_input = ModelInput(values=values)
     assert model_input.approximated == []

@@ -232,7 +232,7 @@ def align_schemas(
     Returns:
         Tuple of (aligned_uci, aligned_kaggle) with identical column sets.
     """
-    target_cols = feature_columns + ["label"]
+    target_cols = [*feature_columns, "label"]
 
     def _align(df: pd.DataFrame, name: str) -> pd.DataFrame:
         missing = [c for c in target_cols if c not in df.columns]

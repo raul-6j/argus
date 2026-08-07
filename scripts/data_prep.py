@@ -31,12 +31,12 @@ logger = logging.getLogger("argus.data_prep")
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.data.loaders import (  # noqa: E402
+from src.data.loaders import (  # noqa: E402 - must follow the sys.path.insert above
     load_kaggle,
     load_uci,
     normalise_labels,
 )
-from src.data.preprocessor import (  # noqa: E402
+from src.data.preprocessor import (  # noqa: E402 - must follow the sys.path.insert above
     align_schemas,
     apply_imputer,
     audit_missing,
@@ -51,7 +51,6 @@ from src.data.preprocessor import (  # noqa: E402
     save_stats,
     stratified_split,
 )
-
 
 # ---------------------------------------------------------------------------
 # Config loader
@@ -111,7 +110,7 @@ def download_uci(config: dict) -> Path:
     dataset = fetch_ucirepo(id=repo_id)
 
     # ucimlrepo returns dataset.data.features (X) and dataset.data.targets (y)
-    import pandas as pd  # noqa: PLC0415
+    import pandas as pd
 
     df = pd.concat(
         [dataset.data.features, dataset.data.targets],
@@ -232,7 +231,7 @@ def _print_kaggle_setup_instructions(dataset_slug: str) -> None:
 def _parquet_available() -> bool:
     """Return True if pyarrow is installed (required for Parquet)."""
     try:
-        import pyarrow  # noqa: F401
+        import pyarrow  # noqa: F401 - imported solely to probe availability
         return True
     except ImportError:
         return False
@@ -362,8 +361,8 @@ def run_pipeline(config: dict, uci_only: bool = False) -> None:
         uci_aligned, kaggle_aligned = align_schemas(uci_renamed, kaggle_renamed, feature_columns)
     else:
         # UCI-only: align UCI alone against the feature contract
-        import pandas as _pd  # noqa: PLC0415
-        dummy_kaggle = _pd.DataFrame(columns=feature_columns + ["label"])
+        import pandas as _pd
+        dummy_kaggle = _pd.DataFrame(columns=[*feature_columns, "label"])
         uci_aligned, _ = align_schemas(uci_renamed, dummy_kaggle, feature_columns)
         kaggle_aligned = None
 

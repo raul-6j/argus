@@ -17,8 +17,8 @@ from src.data.loaders import (
     load_phishtank,
     load_tranco,
     load_uci,
-    normalize_url,
     normalise_labels,
+    normalize_url,
 )
 
 # ---------------------------------------------------------------------------
@@ -49,9 +49,10 @@ def _make_uci_df(n: int = 11_055, labels: list[int] | None = None) -> pd.DataFra
 
 def _write_csv(df: pd.DataFrame) -> Path:
     """Write df to a temp CSV and return its path."""
-    tmp = tempfile.NamedTemporaryFile(suffix=".csv", delete=False)
-    df.to_csv(tmp.name, index=False)
-    return Path(tmp.name)
+    with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as tmp:
+        path = Path(tmp.name)
+    df.to_csv(path, index=False)
+    return path
 
 
 # ---------------------------------------------------------------------------
@@ -72,7 +73,7 @@ class TestLoadUci:
         df = _make_uci_df()
         path = _write_csv(df)
         result = load_uci(path)
-        assert set(_UCI_FEATURE_COLS + ["result"]).issubset(set(result.columns))
+        assert {*_UCI_FEATURE_COLS, "result"}.issubset(set(result.columns))
 
     def test_missing_column_raises(self):
         df = _make_uci_df()

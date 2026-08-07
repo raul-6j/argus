@@ -16,7 +16,7 @@ import pytest
 import redis
 import yaml
 
-from tests.api.conftest import PROJECT_ROOT, _MODEL_PATH
+from tests.api.conftest import _MODEL_PATH, PROJECT_ROOT
 
 try:
     import fakeredis

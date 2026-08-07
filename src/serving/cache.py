@@ -43,7 +43,12 @@ class VerdictCache:
     cache miss (bypass — compute live) rather than failing the request.
     """
 
-    def __init__(self, redis_client: Optional[Any] = None, ttl_s: int = 300, max_inproc_entries: int = _DEFAULT_MAX_INPROC_ENTRIES):
+    def __init__(
+        self,
+        redis_client: Optional[Any] = None,
+        ttl_s: int = 300,
+        max_inproc_entries: int = _DEFAULT_MAX_INPROC_ENTRIES,
+    ):
         self._redis = redis_client
         self._ttl_s = ttl_s
         self._max_inproc_entries = max_inproc_entries

@@ -2,9 +2,13 @@
 # Python 3.10+
 
 # --- ML ---
+# NOTE: xgboost and lightgbm were pinned here but are not imported anywhere in
+# the project (src/, scripts/, tests/, notebooks/, configs/). The four models
+# actually trained and compared are DT/RF/LR/SVM, all from scikit-learn --
+# see configs/model_config.yaml and src/models/train.py. Removed rather than
+# left as ~250 MB of unused wheels in every image build; re-add if a
+# boosted-tree baseline is ever genuinely added to the comparison.
 scikit-learn==1.5.2
-xgboost==2.1.1
-lightgbm==4.5.0
 shap==0.46.0
 matplotlib==3.9.4      # ROC curve + confusion matrix plots (Phase 5, Task 5.2)
 
@@ -42,6 +46,9 @@ onnxruntime==1.19.2      # ONNX inference runtime (src/serving/onnx_runtime.py)
 SQLAlchemy==2.0.51
 argon2-cffi==25.1.0     # Argon2id password hashing
 PyJWT==2.13.0           # 15-min access tokens, HS256
+
+# --- Reports / export (Phase 4, F13) ---
+fpdf2==2.8.4            # pure-Python PDF generation, no system libs (src/api/scan/export.py)
 
 # --- Serialization / config ---
 joblib==1.4.2

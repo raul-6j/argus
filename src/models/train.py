@@ -242,7 +242,13 @@ def run_training(config: dict[str, Any]) -> dict[str, dict[str, Any]]:
     shutil.copy(candidates_dir / f"{best_name}.joblib", production_dir / "model.joblib")
     with (production_dir / "metadata.json").open("w") as fh:
         json.dump(
-            dict(all_metadata[best_name], selection_note="provisional pick by val_f1; see evaluate.py for the test-set-backed decision"),
+            dict(
+                all_metadata[best_name],
+                selection_note=(
+                    "provisional pick by val_f1; see evaluate.py for the "
+                    "test-set-backed decision"
+                ),
+            ),
             fh, indent=2,
         )
     logger.info("Provisional production pick (by val_%s): %s", scoring, best_name)

@@ -14,19 +14,19 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import joblib  # noqa: E402
-import matplotlib  # noqa: E402
+import joblib
+import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
-import numpy as np  # noqa: E402
-import shap  # noqa: E402
-import yaml  # noqa: E402
-from sklearn.metrics import f1_score, precision_score, recall_score  # noqa: E402
+import matplotlib.pyplot as plt
+import numpy as np
+import shap
+import yaml
+from sklearn.metrics import f1_score, precision_score, recall_score
 
-from src.models.contract import FEATURE_ORDER  # noqa: E402
-from src.models.explain import build_explainer  # noqa: E402
-from src.models.train import load_split  # noqa: E402
+from src.models.contract import FEATURE_ORDER
+from src.models.explain import build_explainer
+from src.models.train import load_split
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s %(name)s — %(message)s")
 logging.getLogger("shap").setLevel(logging.WARNING)  # shap's own logger is very chatty at INFO
@@ -165,7 +165,8 @@ def main() -> None:
     new_threshold = calibration["selected_threshold"]
     patched_text, n_subs = re.subn(
         r"^threshold:.*$",
-        f"threshold: {new_threshold}  # calibrated on validation set, {calibration['selected_metrics']['f1']:.4f} F1 (scripts/generate_shap_report.py)",
+        f"threshold: {new_threshold}  # calibrated on validation set, "
+        f"{calibration['selected_metrics']['f1']:.4f} F1 (scripts/generate_shap_report.py)",
         raw_text,
         count=1,
         flags=re.MULTILINE,

@@ -29,9 +29,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import joblib  # noqa: E402
-import numpy as np  # noqa: E402
-import pandas as pd  # noqa: E402
+import joblib
+import numpy as np
+import pandas as pd
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger("export_onnx")
@@ -94,7 +94,7 @@ def validate_parity(pipeline, onnx_bytes: bytes, X: np.ndarray, tolerance: float
     return {
         "max_abs_diff": float(diff.max()),
         "mean_abs_diff": float(diff.mean()),
-        "n_samples": int(len(X)),
+        "n_samples": len(X),
         "tolerance": tolerance,
         "passed": bool(diff.max() <= tolerance),
     }

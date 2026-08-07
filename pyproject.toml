@@ -1,0 +1,92 @@
+# ARGUS — tooling configuration.
+#
+# Deliberately tooling-only: there is no [build-system]/[project] table
+# because ARGUS is run from the source tree (`python -m flask --app
+# src/api/app`, `python scripts/train.py`), never pip-installed as a package.
+# Test configuration stays in pytest.ini, which pytest prefers over this file.
+#
+# Before this existed, `ruff` had no project config, so every invocation
+# picked up whichever defaults that particular ruff version shipped — the
+# results were not reproducible between machines, and `# noqa: E402`
+# directives that are genuinely load-bearing (see per-file-ignores below)
+# were reported as unused whenever E402 happened not to be enabled.
+
+[tool.ruff]
+# The local venv is Python 3.9; requirements.txt and the Docker image target
+# 3.10+. py39 is pinned here as the *lowest* interpreter the code currently
+# has to run on, which keeps ruff from proposing 3.10-only syntax (UP007 /
+# UP045's `X | None`). That rewrite is not merely cosmetic here: SQLAlchemy's
+# declarative mapper evaluates `Mapped[...]` annotations at runtime, so
+# `Optional[str]` -> `str | None` would raise TypeError on 3.9 even with
+# `from __future__ import annotations` in the file. Raise this only once the
+# supported floor is genuinely 3.10 everywhere.
+target-version = "py39"
+
+# The tree sits comfortably inside 100 (99th-percentile line is 97 chars);
+# 110 leaves headroom for the long, deliberately-unwrapped signal and route
+# call sites without flagging a hundred lines of otherwise-fine code.
+line-length = 110
+
+exclude = ["venv", "notebooks", "htmlcov"]
+
+[tool.ruff.lint]
+select = [
+    "F",    # pyflakes — undefined names, unused imports/variables
+    "E4", "E7", "E9",  # pycodestyle errors worth enforcing (not whitespace nits)
+    "E402", # module import not at top of file — see per-file-ignores
+    "E501", # line too long
+    "W",    # pycodestyle warnings
+    "I",    # import sorting
+    "B",    # bugbear — likely bugs (mutable defaults, shadowed loop vars, ...)
+    "C4",   # comprehension simplifications
+    "SIM",  # simplifiable constructs
+    "RET",  # return-statement hygiene
+    "PIE",  # miscellaneous lints
+    "PERF", # obvious performance anti-patterns
+    "RUF",  # ruff-specific rules
+    # Enabled because the tree already carries ~60 `# noqa: BLE001` comments
+    # explaining *why* each blind `except Exception` is deliberate ("a signal
+    # must never crash detection", "enrichment must never crash the
+    # request"). Turning the rule on makes those directives load-bearing
+    # again and forces any *new* blind except to justify itself the same way.
+    "BLE",
+]
+
+ignore = [
+    # The prose in this project's docstrings and comments intentionally uses
+    # typographic punctuation (— – ’ ×). These two rules exist to catch
+    # homoglyph attacks in *identifiers and string literals*, which is not
+    # what is happening here, and firing on every em dash would bury real
+    # findings.
+    "RUF001",
+    "RUF002",
+    "RUF003",
+
+    # "try/except inside a loop". Structurally deliberate throughout ARGUS:
+    # per-item error isolation ("one URL's failure never aborts the run",
+    # "one bad DNS lookup never fails extraction") *requires* the handler to
+    # be inside the loop. Python 3.11+ zero-cost exceptions make the
+    # non-throwing path free anyway, so the rule's premise doesn't hold for
+    # the way it's used here.
+    "PERF203",
+]
+
+# Report/ builds the academic write-up (figures, screenshots, the .docx).
+# It is one-off generation tooling, not shipped application code: matplotlib
+# label strings and python-docx call chains run long by nature, and the
+# stricter simplification rules produce churn with no maintenance payoff.
+# tests/ likewise carries long inline fixtures and assertion messages.
+[tool.ruff.lint.per-file-ignores]
+"Report/*.py" = ["E501", "C408", "E741", "SIM108", "PIE810"]
+"tests/**/*.py" = ["E501"]
+
+# NOTE: E402 is deliberately *not* waived per-directory here. Every script
+# is run directly (`python scripts/train.py`) and so must insert the project
+# root on sys.path before it can import `src.*` — a structural violation the
+# affected imports already carry an explicit `# noqa: E402` for. Waiving the
+# rule for the whole `scripts/` tree instead would make each of those ~113
+# directives "unused" (RUF100) and delete the local, line-level explanation
+# of *why* the import sits below the sys.path call.
+
+[tool.ruff.lint.isort]
+known-first-party = ["src", "scripts", "tests", "sdk"]

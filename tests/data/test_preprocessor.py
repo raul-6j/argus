@@ -81,7 +81,7 @@ class TestAlignSchemas:
         uci = pd.DataFrame({"has_ip_address": [1], "url_length_cat": [0], "label": [1]})
         kag = pd.DataFrame({"has_ip_address": [1], "label": [0]})  # url_length_cat missing
         feature_cols = ["has_ip_address", "url_length_cat"]
-        uci_aligned, kag_aligned = align_schemas(uci, kag, feature_cols)
+        _uci_aligned, kag_aligned = align_schemas(uci, kag, feature_cols)
         assert "url_length_cat" in kag_aligned.columns
         assert kag_aligned["url_length_cat"].isna().all()
 
@@ -156,7 +156,7 @@ class TestMissingValue:
             "a": [None] * 4,
             "label": [None, None, None, None],
         })
-        result, dropped = drop_high_null_columns(df, max_null_rate=0.50)
+        _result, dropped = drop_high_null_columns(df, max_null_rate=0.50)
         assert "label" not in dropped
 
     def test_impute_mode_fills_nulls(self):
@@ -246,7 +246,7 @@ class TestStratifiedSplit:
 
     def test_ratios_not_summing_to_1_raises(self):
         df = _make_df(n=100)
-        with pytest.raises(ValueError, match="sum to 1.0"):
+        with pytest.raises(ValueError, match=r"sum to 1\.0"):
             stratified_split(df, 0.60, 0.15, 0.15, random_state=42)
 
     def test_index_reset_in_all_splits(self):

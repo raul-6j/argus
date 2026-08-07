@@ -17,7 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import yaml  # noqa: E402
+import yaml
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s %(name)s — %(message)s")
 logger = logging.getLogger("argus.benchmark_api")
@@ -61,7 +61,7 @@ def _percentile(sorted_values: list[float], pct: float) -> float:
     for a benchmark report, not a statistics library replacement."""
     if not sorted_values:
         return 0.0
-    idx = min(len(sorted_values) - 1, int(round(pct / 100 * (len(sorted_values) - 1))))
+    idx = min(len(sorted_values) - 1, round(pct / 100 * (len(sorted_values) - 1)))
     return sorted_values[idx]
 
 
@@ -187,7 +187,7 @@ def run_enriched_benchmark() -> dict:
     for i in range(_ENRICHED_N_REQUESTS):
         url = _ENRICHED_BENCHMARK_URLS[i % len(_ENRICHED_BENCHMARK_URLS)]
         start = time.perf_counter()
-        resp = client.post("/detect", json={"url": url, "enrich": True})
+        client.post("/detect", json={"url": url, "enrich": True})
         wall_ms = (time.perf_counter() - start) * 1000
         all_latencies_ms.append(wall_ms)
         per_url_latencies[url].append(wall_ms)

@@ -648,7 +648,7 @@ def _stratified_sample(
 
     # Build strata using fixed lower bounds; add max_rank+1 as the final edge.
     lower_bounds = [b for b in _RANK_STRATA_LOWER_BOUNDS if b <= max_rank]
-    upper_bounds = lower_bounds[1:] + [max_rank + 1]
+    upper_bounds = [*lower_bounds[1:], max_rank + 1]
 
     buckets: list[pd.DataFrame] = [
         df[(df["rank"] > lo) & (df["rank"] <= hi)]
