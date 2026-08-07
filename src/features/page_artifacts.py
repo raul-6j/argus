@@ -36,6 +36,19 @@ FETCH_HEADERS: dict[str, str] = {"User-Agent": "ARGUS-FeatureBot/0.1 (+phishing-
 MAX_BODY_BYTES: int = 5 * 1024 * 1024  # 5 MiB, matches pipeline.py's cap
 MAX_REDIRECTS: int = 3
 
+# Total wall-clock ceiling on streaming one response body, independent of
+# MAX_BODY_BYTES.
+#
+# `requests`' timeout bounds each individual socket *operation*, not the whole
+# transfer: a server that dribbles one byte every four seconds resets the 5s
+# read timeout forever while never approaching the 5 MiB size cap, holding a
+# worker indefinitely (slowloris). Neither existing bound catches that -- only
+# a total-duration cap does. Deliberately generous relative to FETCH_TIMEOUT:
+# a genuinely slow-but-honest page should still be read, and 15s is well inside
+# the enrichment pool's own outer bound (src.api.verdict.extract), which is the
+# backstop if this is somehow exceeded.
+MAX_BODY_READ_SECONDS: float = 15.0
+
 
 @dataclass
 class PageArtifacts:
@@ -72,20 +85,38 @@ class PageArtifacts:
         return self.html is not None and self.fetch_error is None
 
 
-def _read_capped_body(response: Any) -> Optional[str]:
-    """Read a streamed response body up to :data:`MAX_BODY_BYTES`."""
+def _read_capped_body(response: Any) -> tuple[Optional[str], Optional[str]]:
+    """Read a streamed response body, bounded by both size and total duration.
+
+    Args:
+        response: An open ``requests`` streaming response.
+
+    Returns:
+        ``(html, error)`` — exactly one is non-``None``. ``error`` is a short
+        reason string suitable for ``PageArtifacts.fetch_error``; returning it
+        rather than a bare ``None`` lets the caller report *which* bound was
+        hit instead of attributing a slowloris timeout to the size cap.
+    """
+    deadline = time.monotonic() + MAX_BODY_READ_SECONDS
     total = 0
     chunks: list[bytes] = []
     for chunk in response.iter_content(chunk_size=8192):
+        # Checked per chunk, so a trickling server is cut off at the deadline
+        # rather than resetting the per-read socket timeout indefinitely.
+        if time.monotonic() > deadline:
+            logger.warning(
+                "Response body read exceeded %.1fs; aborting", MAX_BODY_READ_SECONDS
+            )
+            return None, "response body read timed out"
         if not chunk:
             continue
         total += len(chunk)
         if total > MAX_BODY_BYTES:
             logger.warning("Response body exceeded %d bytes; aborting", MAX_BODY_BYTES)
-            return None
+            return None, "response body exceeded size cap"
         chunks.append(chunk)
     encoding = response.encoding or "utf-8"
-    return b"".join(chunks).decode(encoding, errors="replace")
+    return b"".join(chunks).decode(encoding, errors="replace"), None
 
 
 def _extract_tls_cert(response: Any) -> Optional[dict[str, Any]]:
@@ -178,9 +209,7 @@ def fetch(url: str) -> PageArtifacts:
                 artifacts.final_url = current
                 artifacts.response_headers = dict(response.headers)
                 artifacts.tls_cert = _extract_tls_cert(response)
-                artifacts.html = _read_capped_body(response)
-                if artifacts.html is None:
-                    artifacts.fetch_error = "response body exceeded size cap"
+                artifacts.html, artifacts.fetch_error = _read_capped_body(response)
                 return artifacts
             finally:
                 response.close()

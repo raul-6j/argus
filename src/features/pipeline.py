@@ -46,6 +46,11 @@ _FETCH_TIMEOUT: float = 5.0
 _FETCH_HEADERS = {"User-Agent": "ARGUS-FeatureBot/0.1 (+phishing-detection)"}
 # Cap the response body to avoid memory exhaustion from a hostile page.
 _MAX_HTML_BYTES: int = 5 * 1024 * 1024  # 5 MiB
+# Total wall-clock cap on streaming one body. _FETCH_TIMEOUT above is per
+# socket operation, so it does not bound a server that trickles bytes forever
+# without ever reaching _MAX_HTML_BYTES. Matches page_artifacts.py's
+# MAX_BODY_READ_SECONDS.
+_MAX_BODY_READ_SECONDS: float = 15.0
 # Redirects are followed manually so each hop can be SSRF-validated.
 _MAX_REDIRECTS: int = 3
 
@@ -146,17 +151,31 @@ class FeatureVector:
 
 
 def _read_capped_body(response: Any) -> Optional[str]:
-    """Read a streamed response body up to :data:`_MAX_HTML_BYTES`.
+    """Read a streamed response body, bounded by both size and total duration.
+
+    ``_FETCH_TIMEOUT`` bounds each socket *operation*, not the whole transfer,
+    so a server trickling bytes just under that timeout could hold this loop
+    open indefinitely without ever reaching the size cap (slowloris). The
+    wall-clock deadline below is what actually bounds that case. Mirrors
+    :func:`src.features.page_artifacts._read_capped_body`, which carries the
+    fuller rationale.
 
     Args:
         response: A streaming ``requests`` response (``stream=True``).
 
     Returns:
-        The decoded body, or ``None`` if it exceeds the size cap.
+        The decoded body, or ``None`` if it exceeds the size cap or the
+        read-duration cap.
     """
+    deadline = time.monotonic() + _MAX_BODY_READ_SECONDS
     total = 0
     chunks: list[bytes] = []
     for chunk in response.iter_content(chunk_size=8192):
+        if time.monotonic() > deadline:
+            logger.warning(
+                "Response body read exceeded %.1fs; aborting", _MAX_BODY_READ_SECONDS
+            )
+            return None
         if not chunk:
             continue
         total += len(chunk)

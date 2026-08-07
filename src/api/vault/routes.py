@@ -9,7 +9,7 @@ multiple devices.
 from __future__ import annotations
 
 from flask import Blueprint, g, jsonify, request
-from marshmallow import Schema, ValidationError, fields
+from marshmallow import Schema, ValidationError, fields, validate
 
 from src.api.auth.middleware import require_auth
 from src.api.route_utils import db_session, error
@@ -17,9 +17,23 @@ from src.api.vault.models import VaultEntry
 
 vault_bp = Blueprint("vault", __name__, url_prefix="/vault")
 
+# Per-user cap on the stored blob. The app-wide MAX_CONTENT_LENGTH already
+# bounds a single *request*, but not what accumulates in the database: without
+# this, one authenticated user could keep writing near-max-size blobs and grow
+# the vault table without limit (CWE-770). This is the tighter of the two
+# bounds and it is the one that protects storage.
+#
+# 256 KiB of base64 is ~192 KiB of plaintext credentials -- far beyond any
+# realistic password vault, so it is a safety ceiling rather than a functional
+# limit. Enforced in the schema so an over-size write is a clean 400 naming
+# the offending field, not a database error.
+MAX_CIPHERTEXT_CHARS = 256 * 1024
+
 
 class VaultPutSchema(Schema):
-    ciphertext = fields.Str(required=True)
+    ciphertext = fields.Str(
+        required=True, validate=validate.Length(max=MAX_CIPHERTEXT_CHARS)
+    )
     version = fields.Int(required=True)
 
 

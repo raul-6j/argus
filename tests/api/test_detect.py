@@ -16,7 +16,7 @@ from src.features.page_artifacts import PageArtifacts
 from src.features.pipeline import FeatureVector
 from src.models.contract import FEATURE_ORDER
 
-MODULE = "src.api.detect"
+MODULE = "src.api.verdict"  # the shared extraction seam these tests patch
 
 # A page_artifacts.fetch() double whose fetch "fails" (html=None) -- keeps
 # enrich=true tests network-free and detection-signal-neutral by default,

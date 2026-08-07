@@ -19,8 +19,6 @@ from __future__ import annotations
 
 import logging
 import re
-import threading
-import time
 from concurrent.futures import (
     ThreadPoolExecutor,
     as_completed,
@@ -36,6 +34,7 @@ import dns.resolver
 import whois
 
 from src.utils.timeout import call_with_timeout as _call_with_timeout
+from src.utils.ttl_cache import TtlCache
 
 logger = logging.getLogger(__name__)
 
@@ -55,15 +54,25 @@ DEFAULT_MAX_WORKERS: int = 8
 # TTL trades a small amount of staleness for a large reduction in WHOIS
 # traffic. Thread-safe: extract_domain_intel_batch fans out across a thread
 # pool, so this cache is read/written from multiple threads concurrently.
+#
+# The TTL is a *staleness* bound, not a *memory* bound: an earlier version of
+# this cache was a plain dict that only skipped expired entries on read and
+# never removed them, so every distinct domain a process ever scanned was
+# retained until the process died (CWE-401). TtlCache adds the missing size
+# cap and LRU eviction. 4096 entries of ~4 small fields is a few MB at worst,
+# and comfortably exceeds the working set of any realistic scanning burst —
+# past that, evicting the least-recently-used domain costs one WHOIS lookup,
+# which is exactly the trade this cache exists to make.
 _WHOIS_CACHE_TTL_SECONDS: float = 6 * 60 * 60
-_whois_cache: dict[str, tuple[float, dict[str, Any]]] = {}
-_whois_cache_lock = threading.Lock()
+_WHOIS_CACHE_MAX_ENTRIES: int = 4096
+_whois_cache: TtlCache[dict[str, Any]] = TtlCache(
+    ttl_s=_WHOIS_CACHE_TTL_SECONDS, max_entries=_WHOIS_CACHE_MAX_ENTRIES
+)
 
 
 def clear_whois_cache() -> None:
     """Clear the WHOIS cache. Exposed for tests; not needed in normal use."""
-    with _whois_cache_lock:
-        _whois_cache.clear()
+    _whois_cache.clear()
 
 # Canonical ordering of every feature this module produces.
 DOMAIN_INTEL_KEYS: tuple[str, ...] = (
@@ -217,7 +226,8 @@ def _whois_features(domain: str) -> dict[str, Any]:
 
 
 def _cached_whois_features(domain: str) -> dict[str, Any]:
-    """Thread-safe, 6-hour-TTL cache wrapper around :func:`_whois_features`.
+    """Thread-safe, 6-hour-TTL, size-bounded cache wrapper around
+    :func:`_whois_features`.
 
     Args:
         domain: Registered domain (e.g. ``"example.com"``).
@@ -227,15 +237,12 @@ def _cached_whois_features(domain: str) -> dict[str, Any]:
         copied so a caller mutating the result (e.g. ``.update()``) never
         corrupts the cached entry for other callers.
     """
-    now = time.monotonic()
-    with _whois_cache_lock:
-        cached = _whois_cache.get(domain)
-        if cached is not None and (now - cached[0]) < _WHOIS_CACHE_TTL_SECONDS:
-            return dict(cached[1])
+    cached = _whois_cache.get(domain)
+    if cached is not None:
+        return dict(cached)
 
     result = _whois_features(domain)
-    with _whois_cache_lock:
-        _whois_cache[domain] = (now, result)
+    _whois_cache.set(domain, result)
     return dict(result)
 
 

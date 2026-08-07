@@ -27,6 +27,7 @@ from flask import Flask, jsonify
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from src.api.auth.api_key_routes import auth_api_keys_bp
 from src.api.auth.routes import auth_bp
@@ -248,6 +249,77 @@ def _connect_redis_or_fail(storage_uri: str) -> Optional[Any]:
     return client
 
 
+# Hard ceiling on any request body, in bytes. Werkzeug checks Content-Length
+# against this the moment the request stream is first touched and raises 413
+# *without reading a single byte* (werkzeug.wsgi.get_input_stream), and for a
+# chunked request it wraps the stream in a LimitedStream that aborts once the
+# cap is passed. Either way the body is never buffered into memory, which is
+# what stops an anonymous caller from spending the process's RAM on a request
+# that was never going to be valid (CWE-770).
+#
+# Note this is enforced at body-read time, not before routing: a view or
+# decorator that rejects a request without reading its body (e.g. @require_auth
+# returning 401) still wins the race. That is harmless -- the request is
+# refused either way and the body is still never read.
+#
+# 1 MiB is generous for this API: the largest legitimate body is a PUT /vault
+# blob (capped separately and lower, in VaultPutSchema), and everything else is
+# a URL or a list of at most `batch_max` URLs.
+_DEFAULT_MAX_CONTENT_LENGTH = 1 * 1024 * 1024
+
+
+def _apply_proxy_fix(app: Flask, trusted_proxy_count: int) -> None:
+    """Trust exactly ``trusted_proxy_count`` reverse proxies' forwarding headers.
+
+    Without this, ``request.remote_addr`` behind a reverse proxy (Azure
+    Container Apps and nginx, the stated deployment targets) is the *proxy's*
+    address for every request. flask-limiter keys its per-IP limits on that
+    value, so every client in the world would share one bucket: one noisy
+    caller would rate-limit everyone else, and the tighter per-IP auth limits
+    (``login`` at 10/min) would stop being a brute-force control at all.
+
+    Deliberately opt-in and count-exact rather than simply always-on. ProxyFix
+    trusts the *last* ``x_for`` entries of ``X-Forwarded-For``, a header any
+    client can send. If the configured count exceeds the number of proxies
+    actually in front of the app, a caller can prepend forged entries and
+    choose which "IP" it is rate-limited as -- turning a fix for one bypass
+    into a different bypass. So the default is 0 (no ProxyFix at all, correct
+    for direct exposure and for local dev), and a deployment must state how
+    many hops it really has.
+
+    ``x_host``/``x_port``/``x_prefix`` are left at 0 on purpose: nothing here
+    generates absolute URLs from the request host, so honouring
+    ``X-Forwarded-Host`` would add Host-header poisoning risk for no benefit.
+
+    Args:
+        app: The app whose WSGI stack to wrap.
+        trusted_proxy_count: Number of trusted proxies between client and app.
+            ``0`` disables the middleware entirely.
+
+    Raises:
+        ValueError: If the configured count is negative.
+    """
+    if trusted_proxy_count < 0:
+        raise ValueError(
+            f"trusted_proxy_count must be >= 0, got {trusted_proxy_count!r}."
+        )
+    if trusted_proxy_count == 0:
+        logger.info(
+            "trusted_proxy_count is 0 -- X-Forwarded-* headers are ignored and rate "
+            "limits key on the direct peer address. Set it to the exact number of "
+            "reverse proxies in front of this app when deploying behind one."
+        )
+        return
+
+    app.wsgi_app = ProxyFix(  # type: ignore[method-assign]
+        app.wsgi_app, x_for=trusted_proxy_count, x_proto=trusted_proxy_count
+    )
+    logger.info(
+        "ProxyFix enabled: trusting the last %d X-Forwarded-For/Proto entry(ies).",
+        trusted_proxy_count,
+    )
+
+
 def _load_detection(config_path: Path) -> dict[str, Any]:
     """Build the detection/fusion-layer state (Phase 1, DEC-A).
 
@@ -363,6 +435,17 @@ def create_app(
     app = Flask(__name__)
     app.config["ALLOW_LOCALHOST"] = api_config.get("allow_localhost", False)
     app.config["AUTH_DEV_RETURN_OTP"] = api_config.get("auth_dev_return_otp", False)
+
+    # Rejected by Werkzeug without the body ever being read -- see
+    # _DEFAULT_MAX_CONTENT_LENGTH. Surfaced as JSON by the 413 handler
+    # registered below, like every other error in this API.
+    app.config["MAX_CONTENT_LENGTH"] = api_config.get(
+        "max_content_length_bytes", _DEFAULT_MAX_CONTENT_LENGTH
+    )
+
+    # Must wrap the WSGI app before the limiter is constructed below, so the
+    # very first request already sees a corrected remote_addr.
+    _apply_proxy_fix(app, int(api_config.get("trusted_proxy_count", 0)))
 
     db_engine = create_db_engine(api_config.get("database_url", "sqlite:///argus.db"))
     init_db(db_engine)
@@ -548,6 +631,13 @@ def create_app(
     @app.errorhandler(429)
     def _rate_limited(_exc):
         return jsonify(error="rate limit exceeded"), 429
+
+    # Werkzeug aborts an over-MAX_CONTENT_LENGTH request itself; without this
+    # the caller gets Werkzeug's HTML error page instead of the JSON shape
+    # every other error path in this API returns.
+    @app.errorhandler(413)
+    def _payload_too_large(_exc):
+        return jsonify(error="request body too large"), 413
 
     # Phase 2 (G2): a Redis outage *after* boot (the boot-time check above
     # only catches an outage at startup) makes flask-limiter propagate a

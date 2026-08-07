@@ -74,6 +74,57 @@ def test_fetch_enforces_size_cap():
     assert "size cap" in artifacts.fetch_error
 
 
+def test_fetch_enforces_body_read_deadline():
+    """A trickling server must be cut off by wall-clock time, not only by size.
+
+    ``requests``' timeout bounds each socket *operation*, so a server that
+    dribbles a byte at a time resets it forever while never approaching
+    MAX_BODY_BYTES — it would hold a worker indefinitely (slowloris). Only the
+    total-duration cap catches that.
+    """
+    resp = _FakeResponse(chunks=[b"x", b"x", b"x"])
+    # A deadline already in the past: the first chunk trips it, so this asserts
+    # the check exists without the test itself having to be slow.
+    with mock.patch(f"{MODULE}.MAX_BODY_READ_SECONDS", -1), mock.patch(
+        f"{SSRF_MODULE}.socket.getaddrinfo", return_value=_addrinfo("93.184.216.34")
+    ), mock.patch(f"{MODULE}._fetch_once", return_value=resp):
+        artifacts = page_artifacts.fetch("http://example.com")
+    assert artifacts.html is None
+    assert artifacts.ok is False
+    assert "timed out" in artifacts.fetch_error
+
+
+def test_body_read_deadline_is_distinguishable_from_the_size_cap():
+    """Two different bounds, two different reported reasons — attributing a
+    slowloris timeout to 'body too large' would send an operator looking in
+    entirely the wrong place."""
+    slow = _FakeResponse(chunks=[b"x"])
+    big = _FakeResponse(chunks=[b"x" * 50])
+    with mock.patch(f"{SSRF_MODULE}.socket.getaddrinfo", return_value=_addrinfo("93.184.216.34")):
+        with mock.patch(f"{MODULE}.MAX_BODY_READ_SECONDS", -1), mock.patch(
+            f"{MODULE}._fetch_once", return_value=slow
+        ):
+            slow_artifacts = page_artifacts.fetch("http://example.com")
+        with mock.patch(f"{MODULE}.MAX_BODY_BYTES", 10), mock.patch(
+            f"{MODULE}._fetch_once", return_value=big
+        ):
+            big_artifacts = page_artifacts.fetch("http://example.com")
+
+    assert slow_artifacts.fetch_error != big_artifacts.fetch_error
+
+
+def test_normal_body_is_unaffected_by_the_read_deadline():
+    """The deadline is generous by design — a slow-but-honest page still reads."""
+    resp = _FakeResponse(chunks=[b"<html>", b"ok", b"</html>"])
+    with mock.patch(
+        f"{SSRF_MODULE}.socket.getaddrinfo", return_value=_addrinfo("93.184.216.34")
+    ), mock.patch(f"{MODULE}._fetch_once", return_value=resp):
+        artifacts = page_artifacts.fetch("http://example.com")
+    assert artifacts.ok is True
+    assert artifacts.html == "<html>ok</html>"
+    assert artifacts.fetch_error is None
+
+
 def test_fetch_blocks_redirect_to_private():
     redirect = _FakeResponse(status_code=302, headers={"Location": "http://127.0.0.1/"})
     addr = [_addrinfo("93.184.216.34"), _addrinfo("127.0.0.1")]

@@ -19,11 +19,10 @@ is always present as the free, zero-latency, no-external-dependency fallback.
 from __future__ import annotations
 
 import logging
-import threading
-import time
 from typing import Any, Optional, Protocol, runtime_checkable
 
 from src.data.loaders import normalize_url
+from src.utils.ttl_cache import TtlCache
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +39,16 @@ _GSB_TIMEOUT_S = 3.0
 # actually implemented -- this keeps that stated design intent, and bounds
 # how often the same URL re-hits Google's API (a real cost/quota concern,
 # not just a latency one).
+#
+# The TTL bounds staleness; _GSB_CACHE_MAX_ENTRIES bounds *memory*. An earlier
+# version was a plain dict that only skipped expired entries on read and never
+# removed them, so every distinct URL a process ever checked was retained for
+# that process's lifetime (CWE-401) -- and unlike the WHOIS cache this one is
+# keyed per *URL*, not per domain, so its key space is effectively unbounded on
+# a public scanner. 8192 normalized URLs is single-digit MB; past that the
+# least-recently-used entry is evicted and costs one GSB lookup.
 _GSB_CACHE_TTL_S = 30 * 60
+_GSB_CACHE_MAX_ENTRIES = 8192
 
 _GSB_ENDPOINT = "https://safebrowsing.googleapis.com/v4/threatMatches:find"
 
@@ -125,35 +133,41 @@ class GoogleSafeBrowsingProvider:
 
     name = "gsb"
 
-    def __init__(self, api_key: str, session: Optional[Any] = None) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        session: Optional[Any] = None,
+        cache_ttl_s: float = _GSB_CACHE_TTL_S,
+        cache_max_entries: int = _GSB_CACHE_MAX_ENTRIES,
+    ) -> None:
+        """Build a provider.
+
+        Args:
+            api_key: The Google Safe Browsing API key.
+            session: An optional ``requests``-compatible requester, injected
+                by tests.
+            cache_ttl_s: Per-URL cache freshness window.
+            cache_max_entries: Hard cap on retained cache entries.
+        """
         self._api_key = api_key
         self._session = session
-        self._cache: dict[str, tuple[float, bool]] = {}
-        self._cache_lock = threading.Lock()
-
-    def _cached(self, normalized_url: str) -> Optional[bool]:
-        now = time.monotonic()
-        with self._cache_lock:
-            entry = self._cache.get(normalized_url)
-        if entry is None:
-            return None
-        cached_at, result = entry
-        if (now - cached_at) >= _GSB_CACHE_TTL_S:
-            return None
-        return result
-
-    def _store(self, normalized_url: str, result: bool) -> None:
-        with self._cache_lock:
-            self._cache[normalized_url] = (time.monotonic(), result)
+        # Bounded + LRU-evicting; see _GSB_CACHE_MAX_ENTRIES. Stores plain
+        # bools, so a cached negative (False) stays distinguishable from a
+        # cache miss (None) -- a negative result is worth caching too, since
+        # the overwhelming majority of checked URLs are not on the blocklist
+        # and each miss would otherwise be a fresh billable API round trip.
+        self._cache: TtlCache[bool] = TtlCache(
+            ttl_s=cache_ttl_s, max_entries=cache_max_entries
+        )
 
     def check(self, url: str) -> bool:
         normalized = normalize_url(url)
-        cached = self._cached(normalized)
+        cached = self._cache.get(normalized)
         if cached is not None:
             return cached
 
         result = self._lookup(url)
-        self._store(normalized, result)
+        self._cache.set(normalized, result)
         return result
 
     def _lookup(self, url: str) -> bool:

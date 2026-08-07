@@ -83,6 +83,22 @@ def model_not_ready():
     return None
 
 
+def enrichment_timed_out():
+    """The shared 504 for a scan whose enrichment exceeded its wall-clock bound.
+
+    ``src.api.verdict.extract`` raises ``TimeoutError`` on the non-degrading
+    endpoints (``/v1/scan``, ``POST /scan``, ``/v1/explain``) rather than
+    quietly returning a lexical-only verdict. Without this it would surface as
+    an opaque 500, which reads as "ARGUS is broken" when the truth is "the
+    target host was too slow" — a distinction the caller needs in order to
+    decide whether retrying is worthwhile.
+
+    Returns:
+        The ``(response, 504)`` tuple.
+    """
+    return error("scan timed out fetching the target URL", 504)
+
+
 def detection_config(argus: Optional[dict[str, Any]] = None) -> dict[str, Any]:
     """The loaded ``detection_config.yaml`` contents, or ``{}`` if disabled/absent.
 

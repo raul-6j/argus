@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import time
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 from typing import Any, Optional
 
 from flask import Blueprint, current_app, g, jsonify, request
@@ -22,7 +23,15 @@ from src.api.public.auth import require_api_key
 from src.api.public.jobs import execute_job, generate_job_id
 from src.api.public.keys import extract_bearer_key, hash_api_key
 from src.api.public.models import ApiKey, ScanJob
-from src.api.route_utils import check_url, db_session, error, latency_ms, model_not_ready, risk_bands_config
+from src.api.route_utils import (
+    check_url,
+    db_session,
+    enrichment_timed_out,
+    error,
+    latency_ms,
+    model_not_ready,
+    risk_bands_config,
+)
 from src.api.schemas import (
     V1ExplainRequestSchema,
     V1ScanAsyncRequestSchema,
@@ -155,7 +164,13 @@ def v1_scan():
     if (not_ready := model_not_ready()) is not None:
         return not_ready
 
-    result = run_scan(url, enrich=bool(data["enrich"]))
+    try:
+        result = run_scan(url, enrich=bool(data["enrich"]))
+    except FuturesTimeoutError:
+        # The enrichment wall-clock bound (src.api.verdict.extract) fired. 504
+        # rather than a lexical-only verdict: a programmatic caller acting on
+        # this result deserves to know the page was never actually inspected.
+        return enrichment_timed_out()
     result["latency_ms"] = latency_ms(start)
     return jsonify(**result)
 
@@ -221,7 +236,10 @@ def v1_explain():
         return not_ready
 
     argus = current_app.extensions["argus"]
-    fv, artifacts = extract(url, enrich=True)
+    try:
+        fv, artifacts = extract(url, enrich=True)
+    except FuturesTimeoutError:
+        return enrichment_timed_out()
     model_input = adapt_to_training_contract(fv.features)
 
     top5 = explain_single(model_input.values, argus["pipeline"], argus["explainer"], argus["model_type"])

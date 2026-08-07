@@ -12,18 +12,15 @@ from __future__ import annotations
 
 import logging
 import time
-from concurrent.futures import TimeoutError as FuturesTimeoutError
 
 from flask import Blueprint, current_app, jsonify, request
 from marshmallow import ValidationError
 
 from src.api.route_utils import check_url, error, latency_ms, risk_bands_config
 from src.api.schemas import DetectRequestSchema, ExplainRequestSchema
-from src.api.verdict import model_proba, prefilter_source, resolve_verdict
+from src.api.verdict import extract, model_proba, prefilter_source, resolve_verdict
 from src.detection.explanation import explain_plain
 from src.detection.types import risk_band_for_score
-from src.features import page_artifacts
-from src.features.pipeline import extract_features
 from src.models.explain import explain_single
 from src.models.feature_adapter import adapt_to_training_contract
 from src.serving.cache import cache_key
@@ -32,62 +29,8 @@ logger = logging.getLogger(__name__)
 
 detect_bp = Blueprint("detect", __name__)
 
-# Overall wall-clock bound on the enrichment path (HTML fetch + WHOIS/DNS),
-# enforced by the persistent thread pool independent of the internal
-# per-fetch timeouts inside src.features.pipeline/domain_intel. This is
-# defense-in-depth: even if an internal timeout misbehaves, the request
-# thread is guaranteed to get control back within this bound.
-_ENRICHMENT_TIMEOUT_S: float = 15.0
-
 _detect_request_schema = DetectRequestSchema()
 _explain_request_schema = ExplainRequestSchema()
-
-
-def _run_enriched_extraction(url: str):
-    """Fetch the page once and extract features from the shared HTML (P1.0).
-
-    Reuses the single fetched HTML for both the live-extractor's HTML tier
-    and the Phase-1 detection signals (favicon match, brand mismatch) —
-    avoiding a second outbound fetch of the same untrusted page. See
-    ``src/features/page_artifacts.py`` and
-    ``docs/ARCHITECTURE_CHANGE_PLAN.md`` §3.
-
-    Returns:
-        A tuple ``(FeatureVector, PageArtifacts)``.
-    """
-    artifacts = page_artifacts.fetch(url)
-    fv = extract_features(url, html=artifacts.html, include_domain=True)
-    return fv, artifacts
-
-
-def _extract_with_bound(url: str, enrich: bool):
-    """Run feature extraction, bounded by the persistent thread pool's timeout.
-
-    Args:
-        url: The (already-validated) URL to extract features from.
-        enrich: Whether to run the HTML/domain-intel tiers (slow path).
-
-    Returns:
-        A tuple ``(FeatureVector, Optional[PageArtifacts])`` —
-        ``PageArtifacts`` is ``None`` on the fast (lexical-only) path, where
-        no page was fetched. Falls back to a lexical-only (fast,
-        synchronous, no network) extraction if enrichment times out or
-        raises — enrichment failures never surface as an error to the
-        caller.
-    """
-    if not enrich:
-        return extract_features(url), None
-
-    executor = current_app.extensions["argus"]["executor"]
-    future = executor.submit(_run_enriched_extraction, url)
-    try:
-        return future.result(timeout=_ENRICHMENT_TIMEOUT_S)
-    except FuturesTimeoutError:
-        logger.warning("Enrichment timed out for %r; falling back to lexical-only", url)
-        return extract_features(url), None
-    except Exception as exc:  # noqa: BLE001 - enrichment must never crash the request
-        logger.warning("Enrichment failed for %r: %s; falling back to lexical-only", url, exc)
-        return extract_features(url), None
 
 
 @detect_bp.post("/detect")
@@ -150,7 +93,7 @@ def detect():
         return jsonify(url=url, latency_ms=latency_ms(start), **cached)
 
     enrich = data["enrich"]
-    fv, artifacts = _extract_with_bound(url, enrich)
+    fv, artifacts = extract(url, enrich=enrich, degrade_on_failure=True)
     model_input = adapt_to_training_contract(fv.features)
 
     # The detection fusion layer (Phase 1, DEC-A) only runs on the enriched
@@ -212,7 +155,7 @@ def explain():
     # features the model treats as "missing input, defaulted to phishing"
     # (see feature_adapter's conservative-default policy), which is not a
     # meaningful "why" answer for the user.
-    fv, artifacts = _extract_with_bound(url, enrich=True)
+    fv, artifacts = extract(url, enrich=True, degrade_on_failure=True)
     model_input = adapt_to_training_contract(fv.features)
 
     top5 = explain_single(

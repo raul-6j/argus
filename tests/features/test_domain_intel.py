@@ -5,6 +5,7 @@ All network access is mocked. No test performs a real WHOIS or DNS lookup.
 
 from __future__ import annotations
 
+import time
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 from unittest import mock
@@ -18,6 +19,7 @@ from src.features.domain_intel import (
     extract_domain_intel,
     extract_domain_intel_batch,
 )
+from src.utils.ttl_cache import TtlCache
 
 MODULE = "src.features.domain_intel"
 
@@ -341,18 +343,44 @@ def test_whois_cache_avoids_second_lookup():
 def test_whois_cache_expires_after_ttl():
     """After the TTL elapses, WHOIS is queried again."""
     record = _fake_whois_record(datetime.utcnow() - timedelta(days=10), None, "R")
+    short_ttl_cache = TtlCache(ttl_s=0.01, max_entries=16)
 
     with mock.patch(f"{MODULE}.whois.whois", return_value=record) as mwhois, mock.patch(
         f"{MODULE}.dns.resolver.resolve",
         side_effect=_patch_dns(a_records=["1.2.3.4"]),
-    ), mock.patch(f"{MODULE}._WHOIS_CACHE_TTL_SECONDS", 0.01):
+    ), mock.patch.object(domain_intel, "_whois_cache", short_ttl_cache):
         extract_domain_intel("expiring.com")
-        import time
-
         time.sleep(0.02)
         extract_domain_intel("expiring.com")
 
     assert mwhois.call_count == 2
+
+
+def test_whois_cache_is_size_bounded():
+    """The WHOIS cache evicts rather than growing without limit (CWE-401).
+
+    A TTL alone is not a memory bound: before this, entries were only *skipped*
+    when stale and never removed, so every distinct domain a process ever
+    scanned was retained until the process died.
+    """
+    record = _fake_whois_record(datetime.utcnow() - timedelta(days=10), None, "R")
+    bounded_cache = TtlCache(ttl_s=3600, max_entries=3)
+
+    with mock.patch(f"{MODULE}.whois.whois", return_value=record) as mwhois, mock.patch(
+        f"{MODULE}.dns.resolver.resolve",
+        side_effect=_patch_dns(a_records=["1.2.3.4"]),
+    ), mock.patch.object(domain_intel, "_whois_cache", bounded_cache):
+        for i in range(10):
+            extract_domain_intel(f"domain{i}.com")
+
+        assert len(bounded_cache) == 3
+        assert mwhois.call_count == 10
+
+        # The most recent 3 survived; the least-recently-used were evicted.
+        extract_domain_intel("domain9.com")
+        assert mwhois.call_count == 10
+        extract_domain_intel("domain0.com")
+        assert mwhois.call_count == 11
 
 
 def test_whois_cache_is_per_domain():

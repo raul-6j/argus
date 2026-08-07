@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from unittest import mock
 
 import pytest
@@ -111,14 +112,37 @@ class TestGoogleSafeBrowsingProvider:
     def test_cache_expires_after_ttl(self):
         session = mock.Mock()
         session.post.return_value = _fake_response(json_body={"matches": [{}]})
-        provider = GoogleSafeBrowsingProvider("fake-key", session=session)
+        provider = GoogleSafeBrowsingProvider("fake-key", session=session, cache_ttl_s=0.01)
 
-        with mock.patch("src.api.threat_intel.providers.time.monotonic", return_value=0.0):
-            provider.check("http://evil.example.com/login")
-        with mock.patch("src.api.threat_intel.providers.time.monotonic", return_value=99999.0):
-            provider.check("http://evil.example.com/login")
+        provider.check("http://evil.example.com/login")
+        time.sleep(0.02)
+        provider.check("http://evil.example.com/login")
 
         assert session.post.call_count == 2
+
+    def test_cache_is_bounded_and_evicts_least_recently_used(self):
+        """The per-URL cache must not grow without limit (CWE-401).
+
+        Keyed per *URL* rather than per domain, so on a public scanner its key
+        space is effectively unbounded — a size cap, not just a TTL, is what
+        prevents a long-lived process from retaining every URL it ever checked.
+        """
+        session = mock.Mock()
+        session.post.return_value = _fake_response(json_body={"matches": []})
+        provider = GoogleSafeBrowsingProvider("fake-key", session=session, cache_max_entries=3)
+
+        for i in range(10):
+            provider.check(f"http://example.com/{i}")
+
+        assert len(provider._cache) == 3
+        # The 10 lookups were all distinct, so none was served from cache.
+        assert session.post.call_count == 10
+        # The most recent 3 are retained; re-checking one is a cache hit.
+        provider.check("http://example.com/9")
+        assert session.post.call_count == 10
+        # The evicted oldest is not, and costs a fresh lookup.
+        provider.check("http://example.com/0")
+        assert session.post.call_count == 11
 
 
 class TestBuildProviders:

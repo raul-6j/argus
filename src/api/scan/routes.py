@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 import secrets
 import time
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -33,7 +34,15 @@ from marshmallow import ValidationError
 
 from src.api.auth.middleware import optional_auth, require_auth
 from src.api.auth.utils import as_aware_utc
-from src.api.route_utils import check_url, db_session, error, latency_ms, model_not_ready, risk_bands_config
+from src.api.route_utils import (
+    check_url,
+    db_session,
+    enrichment_timed_out,
+    error,
+    latency_ms,
+    model_not_ready,
+    risk_bands_config,
+)
 from src.api.scan.export import EXPORT_FORMATS, build_export
 from src.api.scan.models import Scan, UserScan
 from src.api.schemas import ScanRequestSchema
@@ -99,7 +108,14 @@ def create_scan():
         signals_payload: list[dict] = []
         plain_explanation = "This URL matches a known-phishing entry in ARGUS's threat-intelligence feed."
     else:
-        fv, artifacts = extract(url, enrich=True)
+        try:
+            fv, artifacts = extract(url, enrich=True)
+        except FuturesTimeoutError:
+            # Bounded by enrichment_timeout_s (src.api.verdict.extract). This
+            # endpoint persists a shareable report, so a lexical-only fallback
+            # would store — and permalink — a verdict reached without ever
+            # inspecting the page. 504 and store nothing.
+            return enrichment_timed_out()
         verdict = resolve_verdict(
             url,
             proba=model_proba(adapt_to_training_contract(fv.features), argus),

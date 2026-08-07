@@ -44,6 +44,11 @@ onnxruntime==1.19.2      # ONNX inference runtime (src/serving/onnx_runtime.py)
 
 # --- Auth + vault (Phase 8) ---
 SQLAlchemy==2.0.51
+alembic==1.13.2         # schema migrations (see alembic.ini + migrations/).
+                         # Base.metadata.create_all() creates missing TABLES but never
+                         # alters an existing one, so without this any added column
+                         # silently does nothing on a populated database and the app
+                         # fails later, at query time.
 argon2-cffi==25.1.0     # Argon2id password hashing
 PyJWT==2.13.0           # 15-min access tokens, HS256
 

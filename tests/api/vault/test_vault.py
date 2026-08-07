@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import pytest
 
+from src.api.vault.routes import MAX_CIPHERTEXT_CHARS
+
 
 @pytest.fixture
 def auth_headers(client):
@@ -84,3 +86,26 @@ def test_s10_server_stores_only_opaque_ciphertext(client, auth_headers, db_sessi
 def test_put_vault_invalid_body_400(client, auth_headers):
     resp = client.put("/vault", json={"ciphertext": "x"}, headers=auth_headers)  # missing version
     assert resp.status_code == 400
+
+
+def test_put_vault_rejects_oversize_ciphertext(client, auth_headers):
+    """Unbounded blob storage (CWE-770): the app-wide MAX_CONTENT_LENGTH bounds
+    one request, but only this cap bounds what an authenticated user can
+    accumulate in the database across many of them."""
+    oversize = "a" * (MAX_CIPHERTEXT_CHARS + 1)
+    resp = client.put(
+        "/vault", json={"ciphertext": oversize, "version": 0}, headers=auth_headers
+    )
+    assert resp.status_code == 400
+    assert "ciphertext" in resp.get_json()["error"]
+
+
+def test_put_vault_accepts_ciphertext_at_the_limit(client, auth_headers):
+    """The cap is a safety ceiling, not a functional limit — a blob exactly at
+    the boundary must still store cleanly."""
+    at_limit = "a" * MAX_CIPHERTEXT_CHARS
+    resp = client.put(
+        "/vault", json={"ciphertext": at_limit, "version": 0}, headers=auth_headers
+    )
+    assert resp.status_code == 200
+    assert resp.get_json()["version"] == 1

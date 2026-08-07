@@ -286,6 +286,21 @@ def test_fetch_html_enforces_size_cap():
     assert out is None
 
 
+def test_fetch_html_enforces_body_read_deadline():
+    """A trickling server is cut off by wall-clock time, not only by size.
+
+    ``_FETCH_TIMEOUT`` bounds each socket operation, so it never fires against
+    a server dribbling one byte at a time — which would hold this loop open
+    indefinitely without ever reaching ``_MAX_HTML_BYTES``.
+    """
+    resp = _FakeResponse(chunks=[b"x", b"x"])
+    with mock.patch(f"{MODULE}._MAX_BODY_READ_SECONDS", -1), mock.patch(
+        f"{SSRF_MODULE}.socket.getaddrinfo", return_value=_addrinfo("93.184.216.34")
+    ), mock.patch(f"{MODULE}._fetch_once", return_value=resp):
+        out = pipeline._fetch_html("http://example.com")
+    assert out is None
+
+
 def test_fetch_html_blocks_redirect_to_private():
     """A redirect pointing at an internal IP is refused at the next hop."""
     redirect = _FakeResponse(status_code=302, headers={"Location": "http://127.0.0.1/"})

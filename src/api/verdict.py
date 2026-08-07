@@ -28,6 +28,8 @@ and the cycle is gone.
 
 from __future__ import annotations
 
+import logging
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -40,6 +42,21 @@ from src.detection.types import risk_band_for_score
 from src.features import page_artifacts
 from src.features.pipeline import extract_features
 from src.models.feature_adapter import adapt_to_training_contract
+
+logger = logging.getLogger(__name__)
+
+# Overall wall-clock bound on the enrichment path (HTML fetch + WHOIS/DNS),
+# enforced by the persistent thread pool independently of the per-socket
+# timeouts inside src.features.pipeline/page_artifacts/domain_intel.
+#
+# Those inner timeouts are necessary but not sufficient: `requests`' timeout is
+# per socket *operation*, not per request, so a server that trickles bytes just
+# fast enough to reset the read timeout can hold a connection open far longer
+# than the nominal 5s -- classic slowloris. Only an outer wall-clock bound like
+# this one puts a ceiling on the whole operation.
+#
+# Overridable via `enrichment_timeout_s` in api_config.yaml (Iron Law #2).
+_DEFAULT_ENRICHMENT_TIMEOUT_S: float = 15.0
 
 
 @dataclass
@@ -160,17 +177,99 @@ def resolve_verdict(
     )
 
 
-def extract(url: str, *, enrich: bool):
-    """Fetch (if enriching) and extract features for one URL.
+def _run_enriched_extraction(url: str):
+    """Fetch the page once and extract features from the shared HTML (P1.0).
+
+    Reuses the single fetched HTML for both the live-extractor's HTML tier and
+    the Phase-1 detection signals (favicon match, brand mismatch) — avoiding a
+    second outbound fetch of the same untrusted page. See
+    ``src/features/page_artifacts.py`` and ``docs/ARCHITECTURE_CHANGE_PLAN.md``
+    §3.
+
+    Runs on the enrichment pool, never on the caller's own thread — see
+    :func:`extract`.
 
     Returns:
-        ``(FeatureVector, Optional[PageArtifacts])`` — artifacts are
-        ``None`` on the lexical-only path, where no page is fetched.
+        A tuple ``(FeatureVector, PageArtifacts)``.
+    """
+    artifacts = page_artifacts.fetch(url)
+    return extract_features(url, html=artifacts.html, include_domain=True), artifacts
+
+
+def enrichment_timeout_s(argus: dict[str, Any]) -> float:
+    """The configured wall-clock ceiling for one enrichment run."""
+    return float(
+        argus.get("config", {}).get(
+            "enrichment_timeout_s", _DEFAULT_ENRICHMENT_TIMEOUT_S
+        )
+    )
+
+
+def extract(url: str, *, enrich: bool, degrade_on_failure: bool = False):
+    """Fetch (if enriching) and extract features for one URL, under a hard bound.
+
+    The enriched path runs on the persistent enrichment pool
+    (``argus["executor"]``) with a wall-clock timeout rather than inline on the
+    caller's thread. Previously only ``/detect`` did this; ``/v1/scan``,
+    ``/v1/scan/batch``, ``/v1/explain``, ``POST /scan`` and async scan jobs all
+    called ``page_artifacts.fetch()`` straight from the request thread with no
+    outer bound, so a slowloris target could pin a worker for as long as it
+    kept trickling bytes. Centralising the bound here means every one of those
+    call sites is covered by construction, and a future one cannot forget.
+
+    Safe to call from a request thread or from an async job worker: both are
+    outside the enrichment pool, so submitting into it cannot deadlock. It must
+    *not* be called from a task already running on that pool.
+
+    Args:
+        url: The (already-validated) URL to extract features from.
+        enrich: Whether to run the HTML/domain-intel tiers (the slow path).
+        degrade_on_failure: What to do when enrichment times out or raises.
+            ``True`` falls back to a lexical-only (fast, synchronous, no
+            network) extraction; ``False`` re-raises. This is deliberately a
+            per-caller choice rather than one global policy, because the
+            endpoints genuinely differ and each one's existing contract is
+            preserved: ``/detect`` and ``/explain`` have always degraded
+            silently, while ``/v1/*`` and ``POST /scan`` surface failures (as a
+            per-item ``error`` in a batch, or a ``504`` for a single scan).
+            Collapsing the two would have quietly converted ``/v1``'s
+            per-item errors into full-looking verdicts computed from lexical
+            features alone — a worse answer than an honest failure for a
+            caller that is about to act on the verdict.
+
+    Returns:
+        ``(FeatureVector, Optional[PageArtifacts])`` — artifacts are ``None``
+        on the lexical-only path, where no page is fetched, and on the degraded
+        path when ``degrade_on_failure`` is set.
+
+    Raises:
+        concurrent.futures.TimeoutError: If enrichment exceeds
+            ``enrichment_timeout_s`` and ``degrade_on_failure`` is ``False``.
+        Exception: Whatever enrichment raised, when ``degrade_on_failure`` is
+            ``False``.
     """
     if not enrich:
         return extract_features(url), None
-    artifacts = page_artifacts.fetch(url)
-    return extract_features(url, html=artifacts.html, include_domain=True), artifacts
+
+    argus = current_app.extensions["argus"]
+    future = argus["executor"].submit(_run_enriched_extraction, url)
+    try:
+        return future.result(timeout=enrichment_timeout_s(argus))
+    except FuturesTimeoutError:
+        # Drops the task outright if it was still queued behind a saturated
+        # pool; an already-running fetch is abandoned to its own inner timeouts.
+        future.cancel()
+        if not degrade_on_failure:
+            logger.warning("Enrichment timed out for %r", url)
+            raise
+        logger.warning("Enrichment timed out for %r; falling back to lexical-only", url)
+        return extract_features(url), None
+    except Exception as exc:
+        # Not blanket-swallowed: re-raised unless the caller asked to degrade.
+        if not degrade_on_failure:
+            raise
+        logger.warning("Enrichment failed for %r: %s; falling back to lexical-only", url, exc)
+        return extract_features(url), None
 
 
 def run_scan(url: str, enrich: bool) -> dict[str, Any]:

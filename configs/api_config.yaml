@@ -31,6 +31,28 @@ rate_limit: "100 per minute"
 rate_limit_storage_uri: "memory://"
 # rate_limit_storage_uri: "redis://localhost:6379/0"   # prod / multi-worker
 
+# Number of reverse proxies between the client and this app. Controls
+# werkzeug's ProxyFix (src/api/app.py::_apply_proxy_fix).
+#
+# 0 (the default) ignores X-Forwarded-* entirely: correct for local dev and
+# for direct exposure. Behind a proxy this MUST be set, or every rate limit
+# above keys on the proxy's own IP -- one bucket shared by every client on
+# the internet, which makes the per-IP auth limits meaningless.
+#
+# Set it to the EXACT number of hops. X-Forwarded-For is client-supplied, and
+# ProxyFix trusts the last `trusted_proxy_count` entries; a value larger than
+# the real hop count lets a caller prepend forged entries and pick its own
+# rate-limit identity. Azure Container Apps behind its built-in ingress = 1;
+# add 1 for each additional proxy/CDN you terminate through.
+trusted_proxy_count: 0
+
+# Hard ceiling on any request body. Werkzeug rejects anything larger with 413
+# without reading the body at all, so an anonymous caller cannot spend the
+# process's memory on a request that was never going to be valid. The largest
+# legitimate body is a PUT /vault blob, which is separately (and more tightly)
+# capped by MAX_CIPHERTEXT_CHARS in src/api/vault/routes.py.
+max_content_length_bytes: 1048576   # 1 MiB
+
 # Phase 2 (C1): dedicated, stricter limit for the public scan endpoint --
 # it triggers a real outbound fetch of a user-supplied URL, unlike /detect's
 # default (hostname-only, no fetch) fast path.
@@ -73,6 +95,18 @@ ssrf_timeout_s: 5
 # Persistent thread pool for enrichment work (Task 6.2) — sized to bound
 # worst-case concurrent WHOIS/HTML fetches without spawning unboundedly.
 enrichment_max_workers: 8
+
+# Wall-clock ceiling on one enrichment run (HTML fetch + WHOIS/DNS), enforced
+# by the pool above in src/api/verdict.py::extract. Applies to EVERY scanning
+# endpoint — /detect, /explain, /v1/scan, /v1/scan/batch, /v1/explain,
+# POST /scan and async jobs all go through that one helper.
+#
+# This is the outer bound, and it is the only one that bounds total time: the
+# per-socket `requests` timeouts inside the fetchers reset on every byte
+# received, so they do not constrain a server that trickles data (slowloris).
+# Exceeding it degrades that request to a lexical-only verdict rather than
+# erroring.
+enrichment_timeout_s: 15
 
 # F19: a separate, dedicated thread pool for POST /v1/scan/async jobs — kept
 # apart from enrichment_max_workers above so a burst of async submissions

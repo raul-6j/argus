@@ -7,7 +7,7 @@ from unittest import mock
 from src.features.page_artifacts import PageArtifacts
 from tests.api.test_detect import _FAILED_FETCH_ARTIFACTS, _LEGIT_RAW_FEATURES, _fake_feature_vector
 
-MODULE = "src.api.detect"
+MODULE = "src.api.verdict"  # the shared extraction seam these tests patch
 
 
 def test_explain_returns_top5(client):
