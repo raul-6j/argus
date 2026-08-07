@@ -70,5 +70,43 @@ data/processed/*.json
 .idea/
 .vscode/
 
+# --- AI coding assistant (Claude Code) ---
+# Holds only settings.local.json today: machine-local tool permissions, nothing
+# shared. Until now this was hidden purely by a personal ~/.config/git/ignore
+# entry, which is not part of the repo -- so it showed up as untracked on any
+# other clone, machine, or CI runner.
+#
+# The whole directory is ignored rather than just settings.local.json, since
+# nothing in it is shared for this project. If a team-level
+# .claude/settings.json is ever added and should be committed, it needs an
+# explicit negation, because a directory-level ignore cannot be overridden by a
+# pattern for a file inside it:
+#     !.claude/
+#     !.claude/settings.json
+.claude/
+
+# --- Linter cache ---
+# ruff writes .ruff_cache/.gitignore containing "*", so this already
+# self-ignores; listed explicitly rather than relying on the tool to keep
+# policing itself.
+.ruff_cache/
+
 # --- Browser extension (Node tooling for tests only; MV3 needs no build step) ---
 extension/node_modules/
+
+# --- Kept local, deliberately NOT published to the public repository ---
+# These were previously tracked and pushed; untracked via `git rm -r --cached`
+# (files kept on disk, only removed from git's index). Nothing in src/ or
+# tests/ reads any of these at runtime -- they are referenced only in
+# docstrings/comments -- and scripts/evaluate.py recreates reports/ via
+# mkdir(parents=True, exist_ok=True), so a fresh clone still builds and tests
+# clean without them.
+#
+# NOTE: untracking removes them from future commits only. They remain in the
+# repository's existing history on GitHub and stay retrievable from earlier
+# commits; scrubbing them from history is a separate, force-push operation.
+docs/
+Report/
+reports/
+CLAUDE.md
+ARGUS_FEATURE_EXPANSION_ROADMAP.md
