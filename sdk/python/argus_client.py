@@ -17,7 +17,7 @@ Usage:
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 import requests
 
@@ -36,7 +36,12 @@ class ArgusApiError(Exception):
 class ArgusClient:
     """A thin, synchronous client for ARGUS's ``/v1/*`` developer API."""
 
-    def __init__(self, api_key: str, base_url: str = "https://api.argus.example.com", timeout: float = _DEFAULT_TIMEOUT_S):
+    def __init__(
+        self,
+        api_key: str,
+        base_url: str = "https://api.argus.example.com",
+        timeout: float = _DEFAULT_TIMEOUT_S,
+    ):
         """
         Args:
             api_key: Your ARGUS API key (``argus_...``), minted via
