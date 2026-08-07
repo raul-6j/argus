@@ -12,50 +12,53 @@ client-supplied id, mirroring the vault's IDOR-safe scoping.
 
 from __future__ import annotations
 
+import secrets
 import time
 
-from flask import Blueprint, current_app, g, jsonify
+from flask import Blueprint, g, jsonify
 
 from src.api.auth.middleware import require_auth
 from src.api.public.keys import generate_api_key
 from src.api.public.models import ApiKey
+from src.api.route_utils import db_session, error, latency_ms
 
 auth_api_keys_bp = Blueprint("auth_api_keys", __name__, url_prefix="/auth")
-
-
-def _session():
-    return current_app.extensions["argus_auth"]["session_factory"]()
-
-
-def _error(message: str, status: int):
-    return jsonify(error=message), status
 
 
 @auth_api_keys_bp.post("/api-keys")
 @require_auth
 def create_api_key():
-    """Mint a new API key for the logged-in user. The raw key is shown
-    exactly once here — it is never retrievable again after this response."""
+    """Mint a new API key for the logged-in user. The raw key -- and its
+    ``webhook_secret`` (F19), used to sign async-scan-job webhook payloads --
+    are shown exactly once here; neither is ever retrievable again after
+    this response."""
     start = time.perf_counter()
     raw_key, key_hash, key_prefix = generate_api_key()
+    webhook_secret = secrets.token_urlsafe(32)
 
-    session = _session()
+    session = db_session()
     try:
-        api_key = ApiKey(key_hash=key_hash, key_prefix=key_prefix, owner_user_id=g.user_id, tier="free")
+        api_key = ApiKey(
+            key_hash=key_hash,
+            key_prefix=key_prefix,
+            owner_user_id=g.user_id,
+            tier="free",
+            webhook_secret=webhook_secret,
+        )
         session.add(api_key)
         session.commit()
         created_at = api_key.created_at
     finally:
         session.close()
 
-    latency_ms = round((time.perf_counter() - start) * 1000, 3)
     return (
         jsonify(
             api_key=raw_key,
             key_prefix=key_prefix,
             tier="free",
+            webhook_secret=webhook_secret,
             created_at=created_at.isoformat(),
-            latency_ms=latency_ms,
+            latency_ms=latency_ms(start),
         ),
         201,
     )
@@ -66,7 +69,7 @@ def create_api_key():
 def list_api_keys():
     """List the caller's own keys — metadata only, never the raw value."""
     start = time.perf_counter()
-    session = _session()
+    session = db_session()
     try:
         keys = session.query(ApiKey).filter_by(owner_user_id=g.user_id).all()
         payload = [
@@ -82,8 +85,7 @@ def list_api_keys():
     finally:
         session.close()
 
-    latency_ms = round((time.perf_counter() - start) * 1000, 3)
-    return jsonify(keys=payload, latency_ms=latency_ms)
+    return jsonify(keys=payload, latency_ms=latency_ms(start))
 
 
 @auth_api_keys_bp.delete("/api-keys/<key_prefix>")
@@ -97,7 +99,7 @@ def revoke_api_key(key_prefix: str):
     distinguishing "not yours" from "doesn't exist."
     """
     start = time.perf_counter()
-    session = _session()
+    session = db_session()
     try:
         api_key = (
             session.query(ApiKey)
@@ -105,12 +107,11 @@ def revoke_api_key(key_prefix: str):
             .one_or_none()
         )
         if api_key is None:
-            return _error("API key not found", 404)
+            return error("API key not found", 404)
 
         api_key.revoked = True
         session.commit()
     finally:
         session.close()
 
-    latency_ms = round((time.perf_counter() - start) * 1000, 3)
-    return jsonify(revoked=True, latency_ms=latency_ms)
+    return jsonify(revoked=True, latency_ms=latency_ms(start))

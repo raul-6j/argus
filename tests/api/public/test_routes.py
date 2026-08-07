@@ -10,7 +10,10 @@ from src.api.public.keys import generate_api_key
 from src.api.public.models import ApiKey
 from tests.api.test_detect import _FAILED_FETCH_ARTIFACTS, _LEGIT_RAW_FEATURES, _fake_feature_vector
 
-MODULE = "src.api.public.routes"
+# The scan pipeline (fetch + feature extraction) lives in the shared
+# src.api.verdict core, which every scanning endpoint runs through -- that
+# is where the network touchpoints have to be stubbed.
+MODULE = "src.api.verdict"
 
 
 @pytest.fixture

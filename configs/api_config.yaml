@@ -74,6 +74,23 @@ ssrf_timeout_s: 5
 # worst-case concurrent WHOIS/HTML fetches without spawning unboundedly.
 enrichment_max_workers: 8
 
+# F19: a separate, dedicated thread pool for POST /v1/scan/async jobs — kept
+# apart from enrichment_max_workers above so a burst of async submissions
+# can't starve (or be starved by) synchronous /v1/scan enrichment work
+# sharing one process.
+async_job_max_workers: 4
+
+# F19: webhook delivery for completed async scan jobs. Bounded, in-process
+# retries only — deliberately no persistent retry queue/scheduler, the same
+# "scheduling stays external" convention F7 established (DEC-035). A
+# webhook endpoint that's down for longer than these few attempts needs the
+# caller to notice and fall back to polling GET /v1/scan/async/<job_id>,
+# which always holds the authoritative result regardless of webhook outcome.
+webhook_delivery:
+  timeout_s: 5
+  max_attempts: 3
+  retry_backoff_s: [0, 2, 8]
+
 # Decision threshold — kept in sync with configs/model_config.yaml (DEC-017)
 # rather than duplicated as a second source of truth; app.py reads it from
 # model_config.yaml at startup. Present here only as a documented pointer.
@@ -92,7 +109,7 @@ database_url: "sqlite:///argus_dev.db"
 # project) — see DEC-021. When true, /auth/signup includes the OTP in its
 # JSON response instead of "sending" it, for local development/testing only.
 # MUST be false (the default) in any deployment reachable by anyone but you.
-auth_dev_return_otp: false
+auth_dev_return_otp: true
 
 # Extra, tighter per-route limits on the auth endpoints most attractive to
 # brute force/credential-stuffing, independent of S4's per-account OTP

@@ -10,6 +10,7 @@ not persist a report; programmatic callers get a JSON response only.
 
 from __future__ import annotations
 
+import json
 import time
 from typing import Any, Optional
 
@@ -18,27 +19,29 @@ from flask_limiter.util import get_remote_address
 from marshmallow import ValidationError
 
 from src.api.public.auth import require_api_key
+from src.api.public.jobs import execute_job, generate_job_id
 from src.api.public.keys import extract_bearer_key, hash_api_key
-from src.api.public.models import ApiKey
-from src.api.schemas import V1ExplainRequestSchema, V1ScanBatchRequestSchema, V1ScanRequestSchema
-from src.api.threat_intel.prefilter import check_prefilter
-from src.detection import run_detection
+from src.api.public.models import ApiKey, ScanJob
+from src.api.route_utils import check_url, db_session, error, latency_ms, model_not_ready, risk_bands_config
+from src.api.schemas import (
+    V1ExplainRequestSchema,
+    V1ScanAsyncRequestSchema,
+    V1ScanBatchRequestSchema,
+    V1ScanRequestSchema,
+)
+from src.api.verdict import extract, model_proba, resolve_verdict, run_scan
 from src.detection.explanation import explain_plain
-from src.features import page_artifacts
-from src.features.pipeline import extract_features
+from src.detection.types import risk_band_for_score
 from src.models.explain import explain_single
 from src.models.feature_adapter import adapt_to_training_contract
-from src.utils.validators import validate_url
+from src.utils.ssrf import is_safe_fetch_url
 
 public_bp = Blueprint("public", __name__, url_prefix="/v1")
 
 _v1_scan_request_schema = V1ScanRequestSchema()
 _v1_scan_batch_request_schema = V1ScanBatchRequestSchema()
 _v1_explain_request_schema = V1ExplainRequestSchema()
-
-
-def _error(message: str, status: int):
-    return jsonify(error=message), status
+_v1_scan_async_request_schema = V1ScanAsyncRequestSchema()
 
 
 # --------------------------------------------------------------------------- #
@@ -102,64 +105,23 @@ def configure_limits(app, limiter, api_config: dict[str, Any]) -> None:
     ``app.view_functions``.
     """
     del api_config  # tiers are read fresh per-request in _v1_rate_limit_value
-    for endpoint in ("public.v1_scan", "public.v1_scan_batch", "public.v1_explain"):
+    for endpoint in (
+        "public.v1_scan",
+        "public.v1_scan_batch",
+        "public.v1_explain",
+        "public.v1_scan_async",
+        "public.v1_scan_async_status",
+    ):
         app.view_functions[endpoint] = limiter.limit(
             _v1_rate_limit_value, key_func=_v1_rate_limit_key
         )(app.view_functions[endpoint])
 
 
 # --------------------------------------------------------------------------- #
-# Shared detection helper
-# --------------------------------------------------------------------------- #
-
-
-def _run_scan(url: str, enrich: bool) -> dict[str, Any]:
-    """Run the shared detection core for one URL. Never raises."""
-    argus = current_app.extensions["argus"]
-
-    threat_intel = argus.get("threat_intel", {})
-    if threat_intel.get("enabled"):
-        source = check_prefilter(
-            url, threat_intel["phishtank_index"], threat_intel.get("phishtank_hostname_index", frozenset())
-        )
-        if source is not None:
-            return {
-                "url": url, "label": "phishing", "confidence": 1.0, "verdict": "phishing",
-                "risk_score": 1.0, "signals": [], "source": source,
-            }
-
-    if enrich:
-        artifacts = page_artifacts.fetch(url)
-        fv = extract_features(url, html=artifacts.html, include_domain=True)
-    else:
-        artifacts = None
-        fv = extract_features(url)
-
-    model_input = adapt_to_training_contract(fv.features)
-    proba = float(argus["predictor"].predict_proba([model_input.to_vector()])[0][1])
-
-    detection_state = argus.get("detection", {})
-    if enrich and detection_state.get("enabled"):
-        fused = run_detection(
-            url, model_proba=proba, page_artifacts=artifacts, html_features=fv.features,
-            brand_index=detection_state["brand_index"], config=detection_state["config"],
-        )
-        return {
-            "url": url, "label": fused.label, "confidence": fused.confidence, "verdict": fused.label,
-            "risk_score": fused.risk_score, "signals": [s.to_dict() for s in fused.signals],
-            "source": fused.decisive_source,
-        }
-
-    is_phishing = bool(proba >= argus["threshold"])
-    label = "phishing" if is_phishing else "legitimate"
-    return {
-        "url": url, "label": label, "confidence": float(proba if is_phishing else 1 - proba),
-        "verdict": label, "risk_score": proba, "signals": [], "source": "model",
-    }
-
-
-# --------------------------------------------------------------------------- #
 # Routes
+#
+# The scan pipeline itself (pre-filter -> fetch -> extract -> fuse) lives in
+# src.api.verdict, shared with /detect, /explain and POST /scan.
 # --------------------------------------------------------------------------- #
 
 
@@ -169,8 +131,9 @@ def v1_health():
     the user-facing GET /health."""
     start = time.perf_counter()
     model_loaded = bool(current_app.extensions.get("argus", {}).get("pipeline") is not None)
-    latency_ms = round((time.perf_counter() - start) * 1000, 3)
-    return jsonify(status="ok", version="v1", model_loaded=model_loaded, latency_ms=latency_ms)
+    return jsonify(
+        status="ok", version="v1", model_loaded=model_loaded, latency_ms=latency_ms(start)
+    )
 
 
 @public_bp.post("/scan")
@@ -182,19 +145,18 @@ def v1_scan():
     try:
         data = _v1_scan_request_schema.load(body)
     except ValidationError as exc:
-        return _error(f"invalid request: {exc.messages}", 400)
+        return error(f"invalid request: {exc.messages}", 400)
 
     url = data["url"]
-    ok, reason = validate_url(url, allow_localhost=current_app.config.get("ALLOW_LOCALHOST", False))
+    ok, reason = check_url(url)
     if not ok:
-        return _error(reason, 400)
+        return error(reason, 400)
 
-    argus = current_app.extensions["argus"]
-    if argus.get("pipeline") is None:
-        return _error("model not ready", 503)
+    if (not_ready := model_not_ready()) is not None:
+        return not_ready
 
-    result = _run_scan(url, enrich=bool(data["enrich"]))
-    result["latency_ms"] = round((time.perf_counter() - start) * 1000, 3)
+    result = run_scan(url, enrich=bool(data["enrich"]))
+    result["latency_ms"] = latency_ms(start)
     return jsonify(**result)
 
 
@@ -216,28 +178,27 @@ def v1_scan_batch():
     try:
         data = _v1_scan_batch_request_schema.load(body)
     except ValidationError as exc:
-        return _error(f"invalid request: {exc.messages}", 400)
+        return error(f"invalid request: {exc.messages}", 400)
 
     batch_max = current_app.extensions["argus"]["config"].get("batch_max", 50)
     urls = data["urls"][:batch_max]
 
-    argus = current_app.extensions["argus"]
-    if argus.get("pipeline") is None:
-        return _error("model not ready", 503)
+    if (not_ready := model_not_ready()) is not None:
+        return not_ready
 
+    enrich = bool(data["enrich"])
     results: list[dict[str, Any]] = []
     for url in urls:
-        ok, reason = validate_url(url, allow_localhost=current_app.config.get("ALLOW_LOCALHOST", False))
+        ok, reason = check_url(url)
         if not ok:
             results.append({"url": url, "error": reason})
             continue
         try:
-            results.append(_run_scan(url, enrich=bool(data["enrich"])))
+            results.append(run_scan(url, enrich=enrich))
         except Exception as exc:  # noqa: BLE001 - one bad URL never fails the batch
             results.append({"url": url, "error": str(exc)})
 
-    latency_ms = round((time.perf_counter() - start) * 1000, 3)
-    return jsonify(results=results, count=len(results), latency_ms=latency_ms)
+    return jsonify(results=results, count=len(results), latency_ms=latency_ms(start))
 
 
 @public_bp.post("/explain")
@@ -249,39 +210,133 @@ def v1_explain():
     try:
         data = _v1_explain_request_schema.load(body)
     except ValidationError as exc:
-        return _error(f"invalid request: {exc.messages}", 400)
+        return error(f"invalid request: {exc.messages}", 400)
 
     url = data["url"]
-    ok, reason = validate_url(url, allow_localhost=current_app.config.get("ALLOW_LOCALHOST", False))
+    ok, reason = check_url(url)
     if not ok:
-        return _error(reason, 400)
+        return error(reason, 400)
+
+    if (not_ready := model_not_ready()) is not None:
+        return not_ready
 
     argus = current_app.extensions["argus"]
-    if argus.get("pipeline") is None:
-        return _error("model not ready", 503)
-
-    artifacts = page_artifacts.fetch(url)
-    fv = extract_features(url, html=artifacts.html, include_domain=True)
+    fv, artifacts = extract(url, enrich=True)
     model_input = adapt_to_training_contract(fv.features)
 
     top5 = explain_single(model_input.values, argus["pipeline"], argus["explainer"], argus["model_type"])
 
-    detection_state = argus.get("detection", {})
-    proba = float(argus["predictor"].predict_proba([model_input.to_vector()])[0][1])
-    if detection_state.get("enabled"):
-        fused = run_detection(
-            url, model_proba=proba, page_artifacts=artifacts, html_features=fv.features,
-            brand_index=detection_state["brand_index"], config=detection_state["config"],
-        )
-        verdict = fused.label
-        signals_payload = [s.to_dict() for s in fused.signals]
-    else:
-        verdict = "phishing" if proba >= argus["threshold"] else "legitimate"
-        signals_payload = []
-
-    plain_explanation = explain_plain(top5, signals_payload, verdict)
-    latency_ms = round((time.perf_counter() - start) * 1000, 3)
-    return jsonify(
-        url=url, top5_features=top5, signals=signals_payload,
-        plain_explanation=plain_explanation, latency_ms=latency_ms,
+    verdict = resolve_verdict(
+        url,
+        proba=model_proba(model_input, argus),
+        artifacts=artifacts,
+        html_features=fv.features,
+        argus=argus,
+        # /explain always fuses when the layer is enabled, regardless of any
+        # per-request enrich flag -- a SHAP-only "why" would cite features
+        # the adapter defaulted, which isn't a meaningful answer.
+        use_detection=True,
     )
+    return jsonify(
+        url=url, top5_features=top5, signals=verdict.signals,
+        risk_score=verdict.risk_score,
+        risk_band=risk_band_for_score(verdict.risk_score, risk_bands_config(argus)),
+        plain_explanation=explain_plain(top5, verdict.signals, verdict.label),
+        latency_ms=latency_ms(start),
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Async scan jobs + webhooks (F19)
+# --------------------------------------------------------------------------- #
+
+
+@public_bp.post("/scan/async")
+@require_api_key
+def v1_scan_async():
+    """Submit a scan job to run in the background; returns a ``job_id``
+    immediately instead of blocking for the full detection pipeline.
+
+    Poll ``GET /v1/scan/async/<job_id>`` for the result, or pass
+    ``webhook_url`` to also get a signed POST callback on completion.
+    """
+    start = time.perf_counter()
+    body = request.get_json(silent=True) or {}
+    try:
+        data = _v1_scan_async_request_schema.load(body)
+    except ValidationError as exc:
+        return error(f"invalid request: {exc.messages}", 400)
+
+    url = data["url"]
+    ok, reason = check_url(url)
+    if not ok:
+        return error(reason, 400)
+
+    webhook_url = data["webhook_url"]
+    if webhook_url and not is_safe_fetch_url(webhook_url):
+        return error("webhook_url must be a public http(s) URL", 400)
+
+    if (not_ready := model_not_ready()) is not None:
+        return not_ready
+
+    session = db_session()
+    try:
+        job = ScanJob(
+            job_id=generate_job_id(),
+            owner_api_key_id=g.api_key_id,
+            url=url,
+            enrich=bool(data["enrich"]),
+            status="queued",
+            webhook_url=webhook_url,
+            webhook_status="pending" if webhook_url else None,
+        )
+        session.add(job)
+        session.commit()
+        job_id = job.job_id
+    finally:
+        session.close()
+
+    argus = current_app.extensions["argus"]
+    argus["job_executor"].submit(execute_job, current_app._get_current_object(), job_id)
+
+    return jsonify(job_id=job_id, status="queued", latency_ms=latency_ms(start)), 202
+
+
+@public_bp.get("/scan/async/<job_id>")
+@require_api_key
+def v1_scan_async_status(job_id: str):
+    """Poll an async scan job's status/result.
+
+    404 (not 403) for a job that exists but belongs to another key --
+    matches ``revoke_api_key``'s established "don't confirm existence to a
+    non-owner" convention.
+    """
+    start = time.perf_counter()
+    session = db_session()
+    try:
+        job = (
+            session.query(ScanJob)
+            .filter_by(job_id=job_id, owner_api_key_id=g.api_key_id)
+            .one_or_none()
+        )
+        if job is None:
+            return error("job not found", 404)
+
+        payload: dict[str, Any] = {
+            "job_id": job.job_id,
+            "status": job.status,
+            "url": job.url,
+            "webhook_status": job.webhook_status,
+            "webhook_attempts": job.webhook_attempts,
+            "created_at": job.created_at.isoformat(),
+            "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+        }
+        if job.status == "completed":
+            payload["result"] = json.loads(job.result_json)
+        elif job.status == "failed":
+            payload["error"] = job.error
+    finally:
+        session.close()
+
+    payload["latency_ms"] = latency_ms(start)
+    return jsonify(**payload)

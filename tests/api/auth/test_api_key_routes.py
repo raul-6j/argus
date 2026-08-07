@@ -49,6 +49,17 @@ class TestCreateApiKey:
         r2 = client.post("/auth/api-keys", headers=_auth(access_token))
         assert r1.get_json()["api_key"] != r2.get_json()["api_key"]
 
+    def test_returns_a_distinct_webhook_secret(self, client, access_token):
+        """F19: webhook_secret is minted alongside the key and shown once,
+        the same way the raw key itself is."""
+        resp = client.post("/auth/api-keys", headers=_auth(access_token))
+        body = resp.get_json()
+        assert body["webhook_secret"]
+        assert body["webhook_secret"] != body["api_key"]
+
+        second = client.post("/auth/api-keys", headers=_auth(access_token)).get_json()
+        assert second["webhook_secret"] != body["webhook_secret"]
+
 
 class TestListApiKeys:
     def test_requires_auth(self, client):

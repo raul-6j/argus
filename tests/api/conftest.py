@@ -47,6 +47,15 @@ def app():
         "signup": "10000 per minute",
         "verify_otp": "10000 per minute",
     }
+    # Same reasoning as auth_rate_limits above: this session-scoped app is
+    # shared by every test in tests/api/scan/ (and, since Phase 4, the
+    # optional_auth tests in tests/api/auth/ that also POST /scan) from the
+    # same test-client "IP" -- the real 20/minute scan_rate_limit would be
+    # exhausted by the test suite's own cumulative call volume long before
+    # any test intends to check it. scan_rate_limit's actual production
+    # default is exercised separately in tests/api/test_rate_limit.py against
+    # a dedicated, freshly-built app.
+    api_config["scan_rate_limit"] = "10000 per minute"
     # Phase 2 (G1): this app is session-scoped and shared by every test in
     # tests/api/ -- a real verdict cache would leak a mocked extract_features
     # result from one test's URL into a later test mocking the same URL
@@ -86,11 +95,16 @@ def _clean_auth_db(app):
     Cheap and harmless for tests that don't touch auth at all.
     """
     from src.api.auth.models import Otp, RefreshToken, User
+    from src.api.public.models import ApiKey, ScanJob
+    from src.api.scan.models import UserScan
     from src.api.vault.models import VaultEntry
 
     session_factory = app.extensions["argus_auth"]["session_factory"]
     with session_factory() as session:
         session.execute(delete(VaultEntry))
+        session.execute(delete(UserScan))
+        session.execute(delete(ScanJob))
+        session.execute(delete(ApiKey))
         session.execute(delete(RefreshToken))
         session.execute(delete(Otp))
         session.execute(delete(User))
