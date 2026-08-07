@@ -33,13 +33,17 @@ argus/
     utils/      # Logging, config, validators
   tests/        # pytest suite (mirrors src/)
   scripts/      # train.py, evaluate.py, data_prep.py
-  configs/      # model_config.yaml, feature_config.yaml
-  models/       # Serialized models (git-ignored)
+  configs/      # model_config.yaml, feature_config.yaml, api_config.yaml, ...
+  models/       # Serialized models (git-ignored, Iron Law #5)
   notebooks/    # Jupyter notebooks for EDA
-  docs/         # architecture, decisions, experiments, dev guides
-    reports/    # interim reports, project proposal
-    thesis/     # chapter drafts
+  migrations/   # Alembic schema migrations
+  extension/    # MV3 browser extension (Chrome + Firefox, one source tree)
+  webapp/       # Public "scan a URL" web app, served at /app/*
+  sdk/          # Python + JS clients for the /v1 developer API, plus the CLI
 ```
+
+> Architecture notes, the decision log, experiment records and the written
+> report are kept outside this repository.
 
 ## Setup
 
@@ -58,8 +62,16 @@ export TLDEXTRACT_CACHE=/tmp/tldextract_cache
 ## Usage
 
 ```bash
+# A SECRET_KEY is mandatory — the app fails closed without one, by design
+export SECRET_KEY=$(python -c "import secrets; print(secrets.token_urlsafe(32))")
+
+# Train and evaluate first: the API refuses to start without a model
+python scripts/data_prep.py
+python scripts/train.py    --config configs/model_config.yaml
+python scripts/evaluate.py --config configs/model_config.yaml   # writes models/production/
+
 # Run the API locally
-python -m flask --app src/api/app run --debug
+python -m flask --app src/api/app run
 
 # Health check
 curl http://127.0.0.1:5000/health
@@ -68,15 +80,67 @@ curl http://127.0.0.1:5000/health
 pytest tests/ -v --cov=src --cov-report=html
 ```
 
-> Feature extractors and ML training are implemented in later phases.
-> Commands for those (`train.py`, `evaluate.py`, `extractor`) are documented
-> in `CLAUDE.md` and become available as the project grows.
+> **Model artefacts are not in this repository.** Serialized models are
+> git-ignored on purpose, as are the dataset splits. Until `train.py` and
+> `evaluate.py` have been run, `create_app()` will refuse to start and roughly
+> a third of the test suite skips itself.
+
+## Database migrations
+
+Schema is managed with Alembic. `create_all()` creates missing *tables* but
+never alters an existing one, so a schema change needs a migration or it
+silently does nothing and fails later at query time.
+
+```bash
+alembic upgrade head      # apply pending migrations
+alembic current           # what revision this database is at
+alembic upgrade head --sql   # print the SQL without connecting
+
+# After changing a model: register it in src/api/metadata.py FIRST — an
+# unregistered model autogenerates as a DROP TABLE — then:
+alembic revision --autogenerate -m "describe the change"
+```
+
+Always read a generated migration before applying it: autogenerate cannot
+detect renames (it emits drop + add, losing data) or data backfills.
+
+## Deployment
+
+```bash
+# Production server (never Flask's built-in server)
+gunicorn --config gunicorn.conf.py wsgi:application
+
+# Container
+docker build -t argus:latest .
+docker run --rm -p 5000:5000 -e SECRET_KEY="$(openssl rand -base64 32)" argus:latest
+```
+
+Three things to get right in a real deployment:
+
+- **`trusted_proxy_count`** (`configs/api_config.yaml`) must equal the exact
+  number of reverse proxies in front of the app. It defaults to `0`. Left at
+  `0` behind a proxy, every client shares one rate-limit bucket; set higher
+  than reality, clients can forge `X-Forwarded-For` and pick their own bucket.
+- **More than one gunicorn worker requires Redis.** Rate-limit counters and
+  the verdict cache are per-process, so `memory://` storage silently allows
+  N times the configured limit across N workers. See `gunicorn.conf.py`.
+- **Run `alembic upgrade head` as a deploy step**, not from the container
+  entrypoint — otherwise every replica races the same DDL on startup.
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs ruff, the test suite across Python 3.9–3.12,
+`pip-audit` and `bandit`, the extension's vitest/eslint/web-ext checks, and a
+Docker build. The CI job summary reports how many tests were **skipped**,
+because a fresh checkout has no model and cannot run the API tests.
 
 ## Conventions
 
-This project follows strict "Iron Laws" (see `CLAUDE.md`), including:
-structured logging only (no `print()`), `pathlib`-based paths, reproducible
-experiments (`random_state=42`), and `latency_ms` in every API response.
+The project follows strict "Iron Laws": structured logging only (no
+`print()`), `pathlib`-based paths (no hardcoded paths), every feature
+extractor returns `None` rather than raising, `latency_ms` in every API
+response, no serialized models in git, and `random_state=42` everywhere for
+reproducibility.
 
 ## License
 

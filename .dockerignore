@@ -1,0 +1,63 @@
+# Keep the build context small and the image free of things it must not carry.
+# Note this file governs what Docker can SEE, so anything COPY needs must be
+# absent from here -- see the model/data notes below, which are the two
+# non-obvious cases.
+
+# --- Version control / CI ---
+.git
+.github
+.gitignore
+
+# --- Local Python environments and caches ---
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# --- Test + coverage output ---
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+
+# --- Not needed at runtime ---
+tests/
+notebooks/
+scripts/
+docs/
+Report/
+reports/
+sdk/
+*.md
+
+# --- Local databases and dev state ---
+*.db
+*.db-journal
+dump.rdb
+.claude/
+.DS_Store
+
+# --- Node tooling for the extension's tests (no build step for MV3) ---
+extension/node_modules/
+
+# --- Training data: large, and never read at serving time ---
+# The exceptions below are deliberate and load-bearing:
+#   * data/reference/  -- brands.json IS read at boot by the detection layer
+#   * data/raw/feeds/  -- the PhishTank snapshot IS read at boot by the
+#                         threat-intel pre-filter
+#   * data/processed/  -- train.parquet is the SHAP explainer's background
+#                         sample; without it the app still boots but /explain
+#                         is disabled (create_app logs a warning and skips it)
+data/raw/*.csv
+data/raw/*.arff
+
+# NOT ignored, and intentionally so: models/production/*.joblib and
+# metadata.json. They are git-ignored (Iron Law #5) but MUST be present in the
+# build context, because create_app() refuses to start without them. Build
+# from a checkout where `scripts/train.py` + `scripts/evaluate.py` have been
+# run, or mount them at runtime instead.
+models/latest/

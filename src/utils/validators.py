@@ -19,8 +19,14 @@ from urllib.parse import urlparse
 # Literal hostnames that are always rejected regardless of the allow_localhost
 # flag's setting for `enrich` fetches (this is the fast, request-level check —
 # ssrf.py's DNS-based check still applies on the actual fetch path).
+# B104 is suppressed on the line below: bandit reads the "0.0.0.0" literal as
+# a bind address. It is the exact opposite -- this is a DENY-list of hostnames
+# the SSRF validator refuses to fetch. Nothing here binds a socket.
+# (The suppression marker must be a trailing comment on the flagged line, and
+# this explanation must not itself contain the marker word, or bandit parses
+# these prose words as test ids.)
 _LOCALHOST_HOSTNAMES: frozenset[str] = frozenset(
-    {"localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]"}
+    {"localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]"}  # nosec B104
 )
 
 _ALLOWED_SCHEMES: frozenset[str] = frozenset({"http", "https"})

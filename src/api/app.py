@@ -668,4 +668,12 @@ if (PROJECT_ROOT / "models" / "production" / "model.joblib").is_file():
 
 
 if __name__ == "__main__":
-    (app or create_app()).run(debug=True)
+    # Debug mode is OFF unless FLASK_DEBUG is explicitly truthy (audit M-6).
+    # Werkzeug's debugger exposes an interactive Python console on any
+    # traceback -- remote code execution if the port is ever reachable -- so
+    # it must never be the default, least of all in the one code path someone
+    # might copy into a deployment. This entrypoint is for local development
+    # only regardless; production runs through wsgi.py under gunicorn, which
+    # never executes this block.
+    _debug = os.environ.get("FLASK_DEBUG", "").lower() in ("1", "true", "yes", "on")
+    (app or create_app()).run(debug=_debug)

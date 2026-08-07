@@ -22,7 +22,13 @@ from typing import Any
 
 import tldextract
 
-_CACHE_DIR = os.environ.get("TLDEXTRACT_CACHE", "/tmp/tldextract_cache")
+# B108 is suppressed on the line below. A fixed /tmp path is only a hardening
+# concern on a shared, multi-user host, where another user could pre-create the
+# path as a symlink. It is a *fallback*: TLDEXTRACT_CACHE overrides it, the
+# Dockerfile sets it explicitly, and the container runs as a single non-root
+# user. The contents are a public-suffix-list snapshot -- not secret, and not
+# trusted input (suffix_list_urls=() below means it is never re-fetched).
+_CACHE_DIR = os.environ.get("TLDEXTRACT_CACHE", "/tmp/tldextract_cache")  # nosec B108
 
 # suffix_list_urls=() -> snapshot only, no network fetch ever.
 _EXTRACTOR = tldextract.TLDExtract(cache_dir=_CACHE_DIR, suffix_list_urls=())

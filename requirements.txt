@@ -31,6 +31,10 @@ flask-cors==6.0.5
 Flask-Limiter==3.11.0  # in-memory storage by default (see configs/api_config.yaml);
                         # point rate_limit_storage_uri at redis:// for multi-worker prod
 marshmallow==4.0.1
+gunicorn==23.0.0        # production WSGI server (wsgi.py + gunicorn.conf.py, F1).
+                         # Flask's built-in server is single-threaded and explicitly
+                         # not for production; see gunicorn.conf.py before raising
+                         # the worker count -- rate limiting and caches are per-process.
 redis==7.0.1            # backs flask-limiter's storage_uri=redis://... (Phase 2, G2) and
                          # the verdict cache (Phase 2, G1, src/serving/cache.py)
 
