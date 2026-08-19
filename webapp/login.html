@@ -1,70 +1,130 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark light" />
   <title>ARGUS — Log In</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="wrap">
-    <header class="brand">
-      <span class="mark">🛡️</span>
-      <h1>ARGUS</h1>
-    </header>
-    <nav class="site-nav">
-      <a href="index.html">Scan a URL</a>
-      <a href="login.html" class="active">Log in / Sign up</a>
-    </nav>
+  <main class="auth-layout">
+    <div class="auth-shell">
+      <a class="brand" href="index.html">
+        <span class="brand-mark" data-icon="shield-check" aria-hidden="true"></span>
+        <span class="brand-text">
+          <span class="brand-name">ARGUS</span>
+          <span class="brand-sub">Threat Detection</span>
+        </span>
+      </a>
 
-    <div id="loginStep" class="card auth-card">
-      <h2>Log in</h2>
-      <form id="loginForm" class="auth-form">
-        <input id="loginEmail" type="email" placeholder="you@example.com" required autocomplete="email" />
-        <input id="loginPassword" type="password" placeholder="Password" required autocomplete="current-password" />
-        <button type="submit">Log in</button>
-      </form>
-      <p class="auth-switch">
-        Don't have an account? <a href="#" id="showSignup">Sign up</a>
+      <!-- Log in ------------------------------------------------------ -->
+      <section id="loginStep" class="card">
+        <div class="card-body stack stack--lg">
+          <div class="tabs" role="tablist">
+            <button type="button" class="tab active" id="showLoginTab" role="tab" aria-selected="true">Log in</button>
+            <button type="button" class="tab" id="showSignup" role="tab" aria-selected="false">Sign up</button>
+          </div>
+
+          <div class="stack stack--sm">
+            <h1 class="section-title">Welcome back</h1>
+            <p class="meta">Sign in to view your scan history and export reports.</p>
+          </div>
+
+          <form id="loginForm" class="stack">
+            <div class="field">
+              <label class="field-label" for="loginEmail">Email</label>
+              <input id="loginEmail" type="email" placeholder="you@example.com" required autocomplete="email" />
+            </div>
+            <div class="field">
+              <label class="field-label" for="loginPassword">Password</label>
+              <input id="loginPassword" type="password" placeholder="••••••••" required autocomplete="current-password" />
+            </div>
+            <button type="submit" class="btn btn--primary btn--block" data-icon="log-in">Log in</button>
+          </form>
+        </div>
+      </section>
+
+      <!-- Sign up ----------------------------------------------------- -->
+      <section id="signupStep" class="card hidden">
+        <div class="card-body stack stack--lg">
+          <div class="tabs" role="tablist">
+            <button type="button" class="tab" id="showLogin" role="tab" aria-selected="false">Log in</button>
+            <button type="button" class="tab active" id="showSignupTab" role="tab" aria-selected="true">Sign up</button>
+          </div>
+
+          <div class="stack stack--sm">
+            <h1 class="section-title">Create your account</h1>
+            <p class="meta">Free, and scanning stays available without one.</p>
+          </div>
+
+          <form id="signupForm" class="stack">
+            <div class="field">
+              <label class="field-label" for="signupEmail">Email</label>
+              <input id="signupEmail" type="email" placeholder="you@example.com" required autocomplete="email" />
+            </div>
+            <div class="field">
+              <label class="field-label" for="signupPassword">Password</label>
+              <input
+                id="signupPassword"
+                type="password"
+                placeholder="At least 8 characters"
+                required
+                minlength="8"
+                autocomplete="new-password"
+              />
+              <p class="field-hint">Minimum 8 characters. We'll email you a 6-digit code to verify.</p>
+            </div>
+            <button type="submit" class="btn btn--primary btn--block" data-icon="user">Create account</button>
+          </form>
+        </div>
+      </section>
+
+      <!-- Verify ------------------------------------------------------ -->
+      <section id="otpStep" class="card hidden">
+        <div class="card-body stack stack--lg">
+          <div class="stack stack--sm">
+            <span class="eyebrow">Step 2 of 2</span>
+            <h1 class="section-title">Verify your email</h1>
+            <p class="meta">
+              Enter the 6-digit code sent to <strong id="otpEmailLabel"></strong>.
+            </p>
+          </div>
+
+          <form id="otpForm" class="stack">
+            <div class="field">
+              <label class="field-label" for="otpCode">Verification code</label>
+              <input
+                id="otpCode"
+                type="text"
+                inputmode="numeric"
+                pattern="[0-9]{6}"
+                maxlength="6"
+                placeholder="000000"
+                autocomplete="one-time-code"
+                required
+              />
+            </div>
+            <button type="submit" class="btn btn--primary btn--block" data-icon="check">Verify</button>
+          </form>
+
+          <p class="note hide-when-empty" id="devOtpHint"></p>
+        </div>
+      </section>
+
+      <div id="errorBox" class="hidden" role="alert"></div>
+      <div id="successBox" class="hidden" role="status"></div>
+
+      <p class="meta" style="text-align: center">
+        <a href="index.html">← Scan a URL without an account</a>
       </p>
     </div>
+  </main>
 
-    <div id="signupStep" class="card auth-card hidden">
-      <h2>Sign up</h2>
-      <form id="signupForm" class="auth-form">
-        <input id="signupEmail" type="email" placeholder="you@example.com" required autocomplete="email" />
-        <input
-          id="signupPassword"
-          type="password"
-          placeholder="Password (min 8 characters)"
-          required
-          minlength="8"
-          autocomplete="new-password"
-        />
-        <button type="submit">Sign up</button>
-      </form>
-      <p class="auth-switch">
-        Already have an account? <a href="#" id="showLogin">Log in</a>
-      </p>
-    </div>
-
-    <div id="otpStep" class="card auth-card hidden">
-      <h2>Verify your email</h2>
-      <p class="tagline">Enter the 6-digit code sent to <span id="otpEmailLabel"></span>.</p>
-      <form id="otpForm" class="auth-form">
-        <input id="otpCode" type="text" inputmode="numeric" pattern="[0-9]{6}" placeholder="123456" required />
-        <button type="submit">Verify</button>
-      </form>
-      <p class="auth-switch dev-otp-hint" id="devOtpHint"></p>
-    </div>
-
-    <div id="errorBox" class="error-box hidden"></div>
-    <div id="successBox" class="success-box hidden"></div>
-
-    <footer>ARGUS — real-time phishing detection.</footer>
-  </div>
-
+  <script src="icons.js"></script>
   <script src="authClient.js"></script>
+  <script src="report.js"></script>
+  <script src="shell.js"></script>
   <script>
     const loginStep = document.getElementById("loginStep");
     const signupStep = document.getElementById("signupStep");
@@ -81,14 +141,12 @@
     }
 
     function showError(message) {
-      errorBox.textContent = message;
-      errorBox.classList.remove("hidden");
+      showErrorBox(errorBox, message);
       successBox.classList.add("hidden");
     }
 
     function showSuccess(message) {
-      successBox.textContent = message;
-      successBox.classList.remove("hidden");
+      showSuccessBox(successBox, message);
       errorBox.classList.add("hidden");
     }
 
@@ -107,13 +165,16 @@
 
     document.getElementById("loginForm").addEventListener("submit", async (event) => {
       event.preventDefault();
+      const submitBtn = event.target.querySelector('button[type="submit"]');
       const email = document.getElementById("loginEmail").value;
       const password = document.getElementById("loginPassword").value;
+      setButtonBusy(submitBtn, true, "Logging in…");
       try {
         await argusLogin(email, password);
         location.href = "dashboard.html";
       } catch (err) {
         showError(err.message);
+        setButtonBusy(submitBtn, false, "Log in");
       }
     });
 
@@ -121,8 +182,10 @@
 
     document.getElementById("signupForm").addEventListener("submit", async (event) => {
       event.preventDefault();
+      const submitBtn = event.target.querySelector('button[type="submit"]');
       const email = document.getElementById("signupEmail").value;
       const password = document.getElementById("signupPassword").value;
+      setButtonBusy(submitBtn, true, "Creating account…");
       try {
         const resp = await argusSignup(email, password);
         pendingSignupEmail = email;
@@ -137,18 +200,24 @@
         showStep(otpStep);
       } catch (err) {
         showError(err.message);
+      } finally {
+        setButtonBusy(submitBtn, false, "Create account");
       }
     });
 
     document.getElementById("otpForm").addEventListener("submit", async (event) => {
       event.preventDefault();
+      const submitBtn = event.target.querySelector('button[type="submit"]');
       const otp = document.getElementById("otpCode").value;
+      setButtonBusy(submitBtn, true, "Verifying…");
       try {
         await argusVerifyOtp(pendingSignupEmail, otp);
         showStep(loginStep);
         showSuccess("Email verified — you can now log in.");
       } catch (err) {
         showError(err.message);
+      } finally {
+        setButtonBusy(submitBtn, false, "Verify");
       }
     });
   </script>

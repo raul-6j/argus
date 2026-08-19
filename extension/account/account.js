@@ -1,6 +1,9 @@
 import "../lib/browserCompat.js";
+import { icon, hydrateIcons } from "../lib/icons.js";
 import { getCurrentEmail, isLoggedIn, login, logout, signup, verifyOtp } from "../lib/authClient.js";
 import { fetchVault, saveVault } from "../lib/vaultClient.js";
+
+hydrateIcons();
 
 // The vault master password (reusing the login password -- a common,
 // deliberate pattern, e.g. Bitwarden does the same) lives only in this
@@ -34,18 +37,36 @@ function setStatus(message, type = "") {
   statusEl.classList.toggle("status--success", type === "success");
 }
 
-// Disables a submit button and swaps its label while an async request is in
-// flight, restoring both afterward -- without this, a slow request (real
-// network I/O for signup/login/vault sync) looks like the click did nothing.
+// Disables a submit button and swaps its label for a spinner while an async
+// request is in flight, restoring both afterward -- without this, a slow
+// request (real network I/O for signup/login/vault sync) looks like the click
+// did nothing.
+//
+// The buttons carry an inline SVG plus a text node, so the label is captured
+// and restored via the text node alone; assigning `button.textContent` would
+// silently destroy the icon.
 async function withLoading(button, loadingLabel, action) {
-  const originalLabel = button.textContent;
+  const originalLabel = button.textContent.trim();
+  const iconName = button.dataset.icon;
+
   button.disabled = true;
-  button.textContent = loadingLabel;
+  button.setAttribute("aria-busy", "true");
+  button.innerHTML = "";
+  const spinner = document.createElement("span");
+  spinner.className = "spinner";
+  spinner.setAttribute("aria-hidden", "true");
+  button.appendChild(spinner);
+  button.appendChild(document.createTextNode(loadingLabel));
+
   try {
     await action();
   } finally {
     button.disabled = false;
-    button.textContent = originalLabel;
+    button.removeAttribute("aria-busy");
+    button.innerHTML = "";
+    const glyph = icon(iconName);
+    if (glyph) button.appendChild(glyph);
+    button.appendChild(document.createTextNode(originalLabel));
   }
 }
 

@@ -3,42 +3,121 @@
 <head>
   <meta charset="utf-8" />
   <title>ARGUS</title>
+  <link rel="stylesheet" href="../lib/argus-ui.css" />
   <link rel="stylesheet" href="popup.css" />
 </head>
 <body>
   <main>
-    <header>
-      <h1>ARGUS</h1>
-      <span id="hostname" class="hostname"></span>
+    <header class="popup-header">
+      <div class="brand">
+        <span class="brand-mark" data-icon="shield-check" aria-hidden="true"></span>
+        <span class="brand-text">
+          <span class="brand-name">ARGUS</span>
+          <span class="brand-sub">Live check</span>
+        </span>
+      </div>
+      <button
+        id="openSettings"
+        type="button"
+        class="btn btn--ghost btn--icon btn--sm"
+        data-icon="settings"
+        aria-label="Open settings"
+        data-tooltip="Settings"
+      ></button>
     </header>
 
-    <section id="loading" class="state">Checking...</section>
+    <!-- Site under inspection ------------------------------------------ -->
+    <section class="site-strip">
+      <span data-icon="globe" class="site-icon" aria-hidden="true"></span>
+      <span id="hostname" class="hostname">—</span>
+    </section>
 
-    <section id="result" class="state hidden">
-      <div id="verdict" class="verdict"></div>
-      <span id="riskBand" class="risk-band-badge hidden"></span>
-      <div id="confidence" class="confidence"></div>
-      <div class="button-row">
-        <button id="whyBtn" type="button">Why?</button>
-        <button id="deepScanBtn" type="button">Deep Scan</button>
+    <!-- Loading -------------------------------------------------------- -->
+    <section id="loading" class="state popup-body">
+      <div class="scan-status">
+        <span class="spinner" aria-hidden="true"></span>
+        <span>Checking this site…</span>
       </div>
-      <div class="button-row">
-        <button id="scanQrBtn" type="button">Scan QR Code</button>
+      <div class="progress"><div class="progress-bar"></div></div>
+      <div class="stack stack--sm">
+        <div class="skeleton skeleton-block"></div>
+        <div class="skeleton skeleton-text"></div>
       </div>
-      <label id="deepScanConsent" class="deep-scan-consent hidden">
+    </section>
+
+    <!-- Result --------------------------------------------------------- -->
+    <section id="result" class="state popup-body hidden">
+      <div class="verdict-block animate-scale">
+        <div class="verdict-ring" id="verdictRing" aria-hidden="true">
+          <svg viewBox="0 0 84 84">
+            <circle class="ring-track" cx="42" cy="42" r="36" />
+            <circle class="ring-arc" id="ringArc" cx="42" cy="42" r="36" />
+          </svg>
+          <span class="ring-value" id="ringValue">—</span>
+        </div>
+
+        <div class="verdict-meta">
+          <span id="verdict" class="verdict-badge"></span>
+          <span id="riskBand" class="risk-band-badge hidden"></span>
+          <div id="confidence" class="confidence"></div>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button id="deepScanBtn" type="button" class="btn btn--primary" data-icon="zap">Deep Scan</button>
+        <button id="whyBtn" type="button" class="btn btn--secondary" data-icon="eye">Why?</button>
+        <button
+          id="scanQrBtn"
+          type="button"
+          class="btn btn--secondary btn--icon"
+          data-icon="qr-code"
+          aria-label="Scan a QR code"
+          data-tooltip="Scan a QR code"
+        ></button>
+      </div>
+
+      <label id="deepScanConsent" class="checkbox-row deep-scan-consent hidden">
         <input type="checkbox" id="deepScanFullUrl" />
-        Send full URL for this scan (not just the hostname)
+        <span>
+          Send the full URL for this scan
+          <span class="consent-sub">Off by default — only the hostname is sent otherwise.</span>
+        </span>
       </label>
-      <div id="deepScanPanel" class="deep-scan-panel hidden">
+
+      <div id="deepScanPanel" class="panel hidden">
+        <span class="eyebrow">Detection signals</span>
         <div id="signalsPanel" class="signals-panel"></div>
         <p id="plainExplanation" class="plain-explanation"></p>
       </div>
-      <div id="shapPanel" class="shap-panel hidden"></div>
+
+      <div id="shapPanel" class="panel hidden"></div>
+
+      <!-- Recent scans ------------------------------------------------- -->
+      <section id="recentSection" class="panel recent hidden">
+        <button
+          id="recentToggle"
+          type="button"
+          class="recent-toggle"
+          aria-expanded="false"
+          aria-controls="recentList"
+        >
+          <span data-icon="clock" aria-hidden="true"></span>
+          <span class="recent-title">Recent scans</span>
+          <span id="recentCount" class="badge"></span>
+          <span data-icon="chevron-down" class="recent-chevron" aria-hidden="true"></span>
+        </button>
+        <ul id="recentList" class="recent-list hidden"></ul>
+      </section>
     </section>
 
-    <section id="errorState" class="state hidden">
-      <p id="errorMessage"></p>
-      <button id="openOptions" type="button">Open Settings</button>
+    <!-- Error ---------------------------------------------------------- -->
+    <section id="errorState" class="state popup-body hidden">
+      <div class="alert alert--danger" data-icon="alert-triangle">
+        <span id="errorMessage"></span>
+      </div>
+      <button id="openOptions" type="button" class="btn btn--secondary btn--block" data-icon="settings">
+        Open Settings
+      </button>
     </section>
   </main>
   <script type="module" src="popup.js"></script>

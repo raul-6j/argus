@@ -1,45 +1,107 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark light" />
   <title>ARGUS — Scan Report</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="wrap">
-    <header class="brand">
-      <span class="mark">🛡️</span>
-      <h1>ARGUS</h1>
-    </header>
-    <p class="tagline" id="loadingMsg">Loading report...</p>
+  <a href="#main" class="visually-hidden">Skip to main content</a>
 
-    <div id="errorBox" class="error-box hidden"></div>
-    <div id="reportCard" class="card hidden"></div>
-    <div id="exportRow" class="export-row hidden">
-      Export:
-      <a id="exportJson" href="#">JSON</a>
-      <a id="exportCsv" href="#">CSV</a>
-      <a id="exportPdf" href="#">PDF</a>
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="index.html">
+        <span class="brand-mark" data-icon="shield-check" aria-hidden="true"></span>
+        <span class="brand-text">
+          <span class="brand-name">ARGUS</span>
+          <span class="brand-sub">Threat Detection</span>
+        </span>
+      </a>
+
+      <nav class="nav-section" aria-label="Primary">
+        <span class="nav-label">Analysis</span>
+        <a href="index.html" class="nav-item" data-icon="search">Scan a URL</a>
+        <a href="dashboard.html" class="nav-item" data-icon="dashboard">Dashboard</a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="note">
+          <span class="status-dot status-dot--ok" aria-hidden="true"></span>
+          <span>Detection engine online</span>
+        </div>
+      </div>
+    </aside>
+
+    <div class="app-main">
+      <header class="topbar">
+        <button
+          class="btn btn--ghost btn--icon sidebar-toggle"
+          id="sidebarToggle"
+          type="button"
+          aria-label="Toggle navigation"
+          aria-expanded="false"
+          aria-controls="sidebar"
+          data-icon="menu"
+        ></button>
+        <div class="topbar-titles">
+          <h1>Scan Report</h1>
+          <p class="topbar-sub" id="loadingMsg">Loading report…</p>
+        </div>
+        <div class="topbar-actions">
+          <a href="index.html" class="btn btn--secondary btn--sm" data-icon="arrow-left">New scan</a>
+        </div>
+      </header>
+
+      <main class="content content--narrow" id="main">
+        <!-- Skeleton while the report loads -->
+        <section id="reportSkeleton" class="card">
+          <div class="card-body stack">
+            <div class="skeleton skeleton-block"></div>
+            <div class="skeleton skeleton-text"></div>
+            <div class="skeleton skeleton-text"></div>
+          </div>
+        </section>
+
+        <div id="errorBox" class="hidden" role="alert"></div>
+        <div id="reportCard" class="hidden"></div>
+
+        <section id="exportRow" class="card hidden">
+          <div class="card-header" data-icon="download">
+            <h2>
+              Export
+              <span class="card-desc">Download this report for your records</span>
+            </h2>
+          </div>
+          <div class="card-body">
+            <div class="btn-row">
+              <a id="exportJson" href="#" class="btn btn--secondary btn--sm" data-icon="file-text">JSON</a>
+              <a id="exportCsv" href="#" class="btn btn--secondary btn--sm" data-icon="file-text">CSV</a>
+              <a id="exportPdf" href="#" class="btn btn--secondary btn--sm" data-icon="file-text">PDF</a>
+            </div>
+          </div>
+        </section>
+      </main>
     </div>
-
-    <p class="disclosure"><a href="index.html">Scan another URL →</a></p>
-
-    <footer>ARGUS — real-time phishing detection.</footer>
   </div>
 
+  <script src="icons.js"></script>
   <script src="report.js"></script>
+  <script src="shell.js"></script>
   <script>
     const loadingMsg = document.getElementById("loadingMsg");
     const errorBox = document.getElementById("errorBox");
     const reportCard = document.getElementById("reportCard");
+    const reportSkeleton = document.getElementById("reportSkeleton");
 
     async function init() {
       const params = new URLSearchParams(location.search);
       const scanId = params.get("id");
       if (!scanId) {
         loadingMsg.textContent = "";
-        showError(errorBox, "No report id given. Scan a URL first.");
+        reportSkeleton.classList.add("hidden");
+        showErrorBox(errorBox, "No report id given. Scan a URL first.");
         return;
       }
 
@@ -49,7 +111,8 @@
         if (!resp.ok) {
           throw new Error(body.error || `Report not found (HTTP ${resp.status})`);
         }
-        loadingMsg.textContent = "Shared scan report:";
+        loadingMsg.textContent = "Shared scan report";
+        reportSkeleton.classList.add("hidden");
         renderReportCard(reportCard, body);
 
         const exportRow = document.getElementById("exportRow");
@@ -60,7 +123,8 @@
         exportRow.classList.remove("hidden");
       } catch (err) {
         loadingMsg.textContent = "";
-        showError(errorBox, err.message);
+        reportSkeleton.classList.add("hidden");
+        showErrorBox(errorBox, err.message);
       }
     }
 

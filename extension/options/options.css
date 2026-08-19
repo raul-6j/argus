@@ -1,104 +1,56 @@
+/* ARGUS settings page — layout only. Every colour, radius, font and spacing
+   value comes from ../lib/argus-ui.css, which must be linked first. */
+
 body {
-  font-family: system-ui, -apple-system, sans-serif;
-  max-width: 480px;
-  margin: 2rem auto;
-  color: #1a1a1a;
+  min-height: 100vh;
+  background:
+    radial-gradient(900px 420px at 50% -10%, rgba(59, 130, 246, 0.08), transparent 65%),
+    var(--bg);
 }
 
-h1 {
-  font-size: 1.1rem;
-}
-
-label {
-  display: block;
-  margin-top: 1.25rem;
-  font-weight: 600;
-  font-size: 0.9rem;
-}
-
-input[type="text"] {
-  width: 100%;
-  padding: 0.5rem;
-  font-size: 0.95rem;
-  box-sizing: border-box;
-  margin-top: 0.25rem;
-}
-
-.checkbox-row {
+.page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-5) var(--space-10);
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-weight: 500;
+  flex-direction: column;
+  gap: var(--space-8);
 }
 
-.checkbox-row input {
-  margin: 0;
-}
-
-.hint {
-  font-size: 0.8rem;
-  color: #555;
-  margin: 0.35rem 0 0;
-}
-
-button {
-  margin-top: 1.5rem;
-  padding: 0.5rem 1.25rem;
-  font-size: 0.95rem;
-  cursor: pointer;
-}
-
-#status {
-  font-size: 0.85rem;
-  margin-top: 0.75rem;
-}
-
-h2 {
-  font-size: 1rem;
-  margin-top: 1.5rem;
-}
-
-h3 {
-  font-size: 0.9rem;
-  margin-top: 1.25rem;
-}
-
-#protectionStatus {
-  font-size: 0.85rem;
-  color: #2952e3;
-  min-height: 1.2em;
-}
-
-.allowlist-row {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-}
-
-.allowlist-row input {
-  flex: 1;
-  padding: 0.4rem;
-}
-
-.allowlist-items,
-.override-log-items {
-  list-style: none;
-  padding: 0;
-  margin: 0.5rem 0;
-  font-size: 0.85rem;
-}
-
-.allowlist-items li,
-.override-log-items li {
+.page-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.3rem 0;
-  border-bottom: 1px solid #eee;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  padding-bottom: var(--space-5);
+  border-bottom: 1px solid var(--border);
 }
 
-.allowlist-items button {
+.page-title { font-size: var(--text-xl); }
+
+/* Input + button on one line (allowlist entry). */
+.inline-form {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.inline-form input { flex: 1; min-width: 0; }
+
+/* Inline status line next to an action button. Coloured by options.js via
+   the `--ok` / `--error` modifiers. */
+.status-text {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  min-height: 1.2em;
   margin: 0;
-  padding: 0.2rem 0.6rem;
-  font-size: 0.78rem;
+}
+
+.status-text--ok { color: var(--success); }
+.status-text--error { color: var(--danger); }
+
+@media (max-width: 560px) {
+  .page { padding: var(--space-5) var(--space-4) var(--space-8); gap: var(--space-6); }
+  .inline-form { flex-direction: column; }
+  .inline-form .btn { width: 100%; }
 }

@@ -2,88 +2,180 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>ARGUS Settings</title>
+  <link rel="stylesheet" href="../lib/argus-ui.css" />
   <link rel="stylesheet" href="options.css" />
 </head>
 <body>
-  <main>
-    <h1>ARGUS Phishing Detector — Settings</h1>
+  <div class="page">
+    <header class="page-header">
+      <div class="brand">
+        <span class="brand-mark" data-icon="shield-check" aria-hidden="true"></span>
+        <span class="brand-text">
+          <span class="brand-name">ARGUS</span>
+          <span class="brand-sub">Phishing Detector</span>
+        </span>
+      </div>
+      <div class="row row--tight">
+        <button id="scanQrBtn" type="button" class="btn btn--secondary btn--sm" data-icon="qr-code">
+          Scan a QR code
+        </button>
+      </div>
+    </header>
 
-    <label for="apiBaseUrl">ARGUS API base URL</label>
-    <input
-      id="apiBaseUrl"
-      type="text"
-      placeholder="http://localhost:5000"
-      autocomplete="off"
-      spellcheck="false"
-    />
-    <p class="hint">
-      Not pre-filled or hardcoded — point this at your own running ARGUS API
-      instance (dev default is usually <code>http://localhost:5000</code>).
-      Saving requests browser permission to contact this origin.
-    </p>
+    <main class="stack stack--lg">
+      <div class="stack stack--sm">
+        <h1 class="page-title">Settings</h1>
+        <p class="hint">Connection, privacy, and active protection for the ARGUS extension.</p>
+      </div>
 
-    <label class="checkbox-row">
-      <input id="sendFullUrl" type="checkbox" />
-      Send the full URL instead of hostname-only
-    </label>
-    <p class="hint">
-      Off by default (recommended). When off, only the page's
-      <code>scheme://host</code> is sent to the API — never the path, query
-      string, or fragment, which can contain sensitive data (session tokens,
-      search terms, email addresses in a login form's query string, etc).
-    </p>
+      <!-- Connection -------------------------------------------------- -->
+      <section class="card">
+        <div class="card-header" data-icon="server">
+          <h2>
+            API Connection
+            <span class="card-desc">Where this extension sends checks</span>
+          </h2>
+        </div>
+        <div class="card-body stack">
+          <div class="field">
+            <label for="apiBaseUrl">ARGUS API base URL</label>
+            <input
+              id="apiBaseUrl"
+              type="text"
+              placeholder="http://localhost:5000"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <p class="hint">
+              Not pre-filled or hardcoded — point this at your own running ARGUS API
+              instance (dev default is usually <code>http://localhost:5000</code>).
+              Saving requests browser permission to contact this origin.
+            </p>
+          </div>
 
-    <button id="save">Save</button>
-    <p id="status" role="status"></p>
+          <hr class="divider" />
 
-    <hr />
+          <label class="switch-row" for="sendFullUrl">
+            <span class="switch-copy">
+              <span class="switch-title">Send the full URL instead of hostname-only</span>
+              <span class="hint">
+                Off by default (recommended). When off, only the page's
+                <code>scheme://host</code> is sent to the API — never the path, query
+                string, or fragment, which can contain sensitive data (session tokens,
+                search terms, email addresses in a login form's query string, etc).
+              </span>
+            </span>
+            <input id="sendFullUrl" type="checkbox" class="switch" />
+          </label>
 
-    <h2>Active Protection Mode (opt-in)</h2>
-    <p class="hint">
-      When enabled, ARGUS checks every site you navigate to (hostname only,
-      same privacy floor as the popup's passive check) <em>before</em> the
-      page loads, and warns you if it's flagged. This requires the browser's
-      <code>webNavigation</code> permission plus access to all http/https
-      sites, which Chrome will prompt you to grant. Manifest V3 doesn't allow
-      extensions to truly block a navigation, so on a fast-loading page the
-      original content may flash briefly before the warning replaces it —
-      a browser platform limitation, not a bug.
-    </p>
-    <label class="checkbox-row">
-      <input id="activeProtectionEnabled" type="checkbox" />
-      Enable Active Protection Mode
-    </label>
-    <p id="protectionStatus" role="status"></p>
+          <div class="row">
+            <button id="save" type="button" class="btn btn--primary" data-icon="save">Save</button>
+            <p id="status" class="status-text" role="status"></p>
+          </div>
+        </div>
+      </section>
 
-    <h3>Allowlist</h3>
-    <p class="hint">Sites here are never checked or warned about.</p>
-    <div class="allowlist-row">
-      <input id="allowlistInput" type="text" placeholder="example.com" spellcheck="false" />
-      <button id="addAllowlistBtn" type="button">Add</button>
-    </div>
-    <ul id="allowlistItems" class="allowlist-items"></ul>
+      <!-- Active protection -------------------------------------------- -->
+      <section class="card">
+        <div class="card-header" data-icon="radar">
+          <h2>
+            Active Protection Mode
+            <span class="card-desc">Opt-in pre-navigation warnings</span>
+          </h2>
+          <span class="badge badge--accent">Optional</span>
+        </div>
+        <div class="card-body stack">
+          <label class="switch-row" for="activeProtectionEnabled">
+            <span class="switch-copy">
+              <span class="switch-title">Enable Active Protection Mode</span>
+              <span class="hint">
+                When enabled, ARGUS checks every site you navigate to (hostname only,
+                same privacy floor as the popup's passive check) <em>before</em> the
+                page loads, and warns you if it's flagged.
+              </span>
+            </span>
+            <input id="activeProtectionEnabled" type="checkbox" class="switch" />
+          </label>
 
-    <h3>Recent "Continue Anyway" overrides</h3>
-    <p class="hint">
-      Recorded locally on this device only — never sent to ARGUS or anyone
-      else.
-    </p>
-    <ul id="overrideLogItems" class="override-log-items"></ul>
-    <button id="clearOverrideLogBtn" type="button">Clear log</button>
+          <p id="protectionStatus" class="status-text" role="status"></p>
 
-    <hr />
-    <p>
-      <button id="scanQrBtn" type="button">Scan a QR Code</button>
-    </p>
+          <p class="note" data-icon="info">
+            <span>
+              This requires the browser's <code>webNavigation</code> permission plus
+              access to all http/https sites, which Chrome will prompt you to grant.
+              Manifest V3 doesn't allow extensions to truly block a navigation, so on a
+              fast-loading page the original content may flash briefly before the warning
+              replaces it — a browser platform limitation, not a bug.
+            </span>
+          </p>
+        </div>
+      </section>
 
-    <hr />
-    <p>
-      <a id="accountLink" href="../account/account.html" target="_blank" rel="noopener">
-        Sign up / Log in (cross-device sync, Phase 8)
-      </a>
-    </p>
-  </main>
+      <!-- Allowlist ---------------------------------------------------- -->
+      <section class="card">
+        <div class="card-header" data-icon="check-circle">
+          <h2>
+            Allowlist
+            <span class="card-desc">Sites here are never checked or warned about</span>
+          </h2>
+        </div>
+        <div class="card-body stack">
+          <div class="inline-form">
+            <label for="allowlistInput" class="visually-hidden">Hostname to allow</label>
+            <input id="allowlistInput" type="text" placeholder="example.com" spellcheck="false" />
+            <button id="addAllowlistBtn" type="button" class="btn btn--secondary" data-icon="plus">Add</button>
+          </div>
+          <ul id="allowlistItems" class="data-list"></ul>
+        </div>
+      </section>
+
+      <!-- Override log -------------------------------------------------- -->
+      <section class="card">
+        <div class="card-header" data-icon="clock">
+          <h2>
+            "Continue Anyway" Overrides
+            <span class="card-desc">Recorded locally on this device only</span>
+          </h2>
+        </div>
+        <div class="card-body stack">
+          <p class="hint">
+            These entries never leave this device — they are not sent to ARGUS or
+            anyone else.
+          </p>
+          <ul id="overrideLogItems" class="data-list"></ul>
+          <div class="row">
+            <button id="clearOverrideLogBtn" type="button" class="btn btn--danger btn--sm" data-icon="trash">
+              Clear log
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Account ------------------------------------------------------ -->
+      <section class="card">
+        <div class="card-header" data-icon="user">
+          <h2>
+            Account
+            <span class="card-desc">Optional cross-device sync</span>
+          </h2>
+        </div>
+        <div class="card-body">
+          <a
+            id="accountLink"
+            href="../account/account.html"
+            target="_blank"
+            rel="noopener"
+            class="btn btn--secondary"
+            data-icon="external-link"
+          >
+            Sign up / Log in
+          </a>
+        </div>
+      </section>
+    </main>
+  </div>
   <script type="module" src="options.js"></script>
 </body>
 </html>

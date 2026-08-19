@@ -1,55 +1,264 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark light" />
   <title>ARGUS — Dashboard</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="wrap">
-    <header class="brand">
-      <span class="mark">🛡️</span>
-      <h1>ARGUS</h1>
-    </header>
-    <nav class="site-nav">
-      <a href="index.html">Scan a URL</a>
-      <a href="dashboard.html" class="active">Dashboard</a>
-      <a href="#" id="logoutLink">Log out</a>
-    </nav>
-    <p class="tagline">Your scan history, risk distribution, and detection-source breakdown.</p>
+  <a href="#main" class="visually-hidden">Skip to main content</a>
 
-    <div id="errorBox" class="error-box hidden"></div>
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="index.html">
+        <span class="brand-mark" data-icon="shield-check" aria-hidden="true"></span>
+        <span class="brand-text">
+          <span class="brand-name">ARGUS</span>
+          <span class="brand-sub">Threat Detection</span>
+        </span>
+      </a>
 
-    <section class="card">
-      <h2>Risk band distribution</h2>
-      <div id="riskBandBreakdown"></div>
-    </section>
+      <nav class="nav-section" aria-label="Primary">
+        <span class="nav-label">Analysis</span>
+        <a href="index.html" class="nav-item" data-icon="search">Scan a URL</a>
+        <a href="dashboard.html" class="nav-item" data-icon="dashboard">Dashboard</a>
+      </nav>
 
-    <section class="card">
-      <h2>Detection source breakdown</h2>
-      <div id="sourceBreakdown"></div>
-    </section>
+      <div class="sidebar-footer">
+        <div class="nav-section">
+          <span class="nav-label">Account</span>
+          <a href="#" class="nav-item" id="logoutLink" data-icon="log-out">Log out</a>
+        </div>
+        <div class="note">
+          <span class="status-dot" id="engineDot" aria-hidden="true"></span>
+          <span id="engineStatus">Checking engine…</span>
+        </div>
+      </div>
+    </aside>
 
-    <section class="card">
-      <h2>Recent scans</h2>
-      <div id="historyList"></div>
-    </section>
+    <div class="app-main">
+      <header class="topbar">
+        <button
+          class="btn btn--ghost btn--icon sidebar-toggle"
+          id="sidebarToggle"
+          type="button"
+          aria-label="Toggle navigation"
+          aria-expanded="false"
+          aria-controls="sidebar"
+          data-icon="menu"
+        ></button>
+        <div class="topbar-titles">
+          <h1>Security Overview</h1>
+          <p class="topbar-sub">Scan history, risk distribution, and detection sources</p>
+        </div>
+        <div class="topbar-actions">
+          <a href="index.html" class="btn btn--primary btn--sm" data-icon="plus">New scan</a>
+        </div>
+      </header>
 
-    <footer>ARGUS — real-time phishing detection.</footer>
+      <main class="content" id="main">
+        <div id="errorBox" class="hidden" role="alert"></div>
+
+        <!-- KPI row ---------------------------------------------------- -->
+        <section class="kpi-grid stagger" id="kpiGrid" aria-label="Key metrics">
+          <article class="kpi">
+            <div class="kpi-top">
+              <span class="kpi-label">URLs Scanned</span>
+              <span class="kpi-icon" data-icon="search" aria-hidden="true"></span>
+            </div>
+            <span class="kpi-value" id="kpiTotal">—</span>
+            <span class="kpi-foot" id="kpiTotalFoot">Across your account</span>
+          </article>
+
+          <article class="kpi">
+            <div class="kpi-top">
+              <span class="kpi-label">Threats Detected</span>
+              <span class="kpi-icon kpi-icon--danger" data-icon="shield-alert" aria-hidden="true"></span>
+            </div>
+            <span class="kpi-value" id="kpiThreats">—</span>
+            <span class="kpi-foot" id="kpiThreatsFoot">Flagged as phishing</span>
+          </article>
+
+          <article class="kpi">
+            <div class="kpi-top">
+              <span class="kpi-label">Safe URLs</span>
+              <span class="kpi-icon kpi-icon--success" data-icon="shield-check" aria-hidden="true"></span>
+            </div>
+            <span class="kpi-value" id="kpiSafe">—</span>
+            <span class="kpi-foot" id="kpiSafeFoot">Cleared by the engine</span>
+          </article>
+
+          <article class="kpi">
+            <div class="kpi-top">
+              <span class="kpi-label">Mean Confidence</span>
+              <span class="kpi-icon kpi-icon--info" data-icon="cpu" aria-hidden="true"></span>
+            </div>
+            <span class="kpi-value" id="kpiConfidence">—</span>
+            <span class="kpi-foot">Average across all verdicts</span>
+          </article>
+
+          <article class="kpi">
+            <div class="kpi-top">
+              <span class="kpi-label">Brand Impersonation</span>
+              <span class="kpi-icon kpi-icon--warning" data-icon="target" aria-hidden="true"></span>
+            </div>
+            <span class="kpi-value" id="kpiBrand">—</span>
+            <span class="kpi-foot">Scans with a brand signal</span>
+          </article>
+
+          <article class="kpi">
+            <div class="kpi-top">
+              <span class="kpi-label">Detection Sources</span>
+              <span class="kpi-icon" data-icon="database" aria-hidden="true"></span>
+            </div>
+            <span class="kpi-value" id="kpiSources">—</span>
+            <span class="kpi-foot" id="kpiSourcesFoot">Engines contributing verdicts</span>
+          </article>
+        </section>
+
+        <!-- Timeline --------------------------------------------------- -->
+        <section class="card">
+          <div class="card-header" data-icon="activity">
+            <h2>
+              Detection Timeline
+              <span class="card-desc">Daily scan volume by verdict, last 14 days</span>
+            </h2>
+          </div>
+          <div class="card-body">
+            <div id="timelineChart"></div>
+          </div>
+        </section>
+
+        <!-- Distributions ---------------------------------------------- -->
+        <div class="grid-2">
+          <section class="card">
+            <div class="card-header" data-icon="bar-chart">
+              <h2>
+                Risk Distribution
+                <span class="card-desc">Calibrated risk bands</span>
+              </h2>
+            </div>
+            <div class="card-body">
+              <div id="riskBandBreakdown"></div>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-header" data-icon="database">
+              <h2>
+                Detection Sources
+                <span class="card-desc">Which layer decided each verdict</span>
+              </h2>
+            </div>
+            <div class="card-body">
+              <div id="sourceBreakdown"></div>
+            </div>
+          </section>
+        </div>
+
+        <!-- Top threat categories -------------------------------------- -->
+        <section class="card">
+          <div class="card-header" data-icon="radar">
+            <h2>
+              Top Threat Categories
+              <span class="card-desc">Most frequently triggered detection signals</span>
+            </h2>
+          </div>
+          <div class="card-body">
+            <div id="signalBreakdown"></div>
+          </div>
+        </section>
+
+        <!-- History table ---------------------------------------------- -->
+        <section class="card">
+          <div class="card-header" data-icon="clock">
+            <h2>
+              Recent Scans
+              <span class="card-desc" id="historyCount">Your scan history</span>
+            </h2>
+          </div>
+
+          <div class="toolbar">
+            <span class="input-group" data-icon="search">
+              <label for="historySearch" class="visually-hidden">Search scans by URL</label>
+              <input id="historySearch" type="text" placeholder="Search by URL…" autocomplete="off" spellcheck="false" />
+            </span>
+            <div class="filter-chips" role="group" aria-label="Filter by verdict">
+              <button type="button" class="filter-chip" data-filter="all" aria-pressed="true">All</button>
+              <button type="button" class="filter-chip" data-filter="phishing" aria-pressed="false">Phishing</button>
+              <button type="button" class="filter-chip" data-filter="legitimate" aria-pressed="false">Legitimate</button>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th scope="col" class="sortable" data-sort="label" aria-sort="none">
+                    Verdict<span class="sort-indicator">↕</span>
+                  </th>
+                  <th scope="col" class="sortable" data-sort="risk_band" aria-sort="none">
+                    Risk<span class="sort-indicator">↕</span>
+                  </th>
+                  <th scope="col">URL</th>
+                  <th scope="col">Source</th>
+                  <th scope="col" class="sortable" data-sort="created_at" aria-sort="descending">
+                    Scanned<span class="sort-indicator">↕</span>
+                  </th>
+                  <th scope="col"><span class="visually-hidden">Export</span></th>
+                </tr>
+              </thead>
+              <tbody id="historyList"></tbody>
+            </table>
+          </div>
+
+          <div id="historyEmpty" class="hidden"></div>
+
+          <div class="pagination" id="pagination">
+            <span id="paginationInfo">—</span>
+            <div class="pagination-controls">
+              <button type="button" class="btn btn--secondary btn--sm" id="prevPage" data-icon="arrow-left">Prev</button>
+              <button type="button" class="btn btn--secondary btn--sm" id="nextPage">Next</button>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
   </div>
 
+  <script src="icons.js"></script>
   <script src="authClient.js"></script>
   <script src="report.js"></script>
+  <script src="shell.js"></script>
   <script>
     const errorBox = document.getElementById("errorBox");
     const riskBandBreakdown = document.getElementById("riskBandBreakdown");
     const sourceBreakdown = document.getElementById("sourceBreakdown");
+    const signalBreakdown = document.getElementById("signalBreakdown");
+    const timelineChart = document.getElementById("timelineChart");
     const historyList = document.getElementById("historyList");
+    const historyEmpty = document.getElementById("historyEmpty");
+    const historySearch = document.getElementById("historySearch");
+    const paginationInfo = document.getElementById("paginationInfo");
+    const prevPage = document.getElementById("prevPage");
+    const nextPage = document.getElementById("nextPage");
 
-    function showError(message) {
-      errorBox.textContent = message;
-      errorBox.classList.remove("hidden");
+    const PAGE_SIZE = 25;
+    // Ordered worst-first so sorting by risk is meaningful, not alphabetical.
+    const BAND_RANK = { critical: 0, high: 1, suspicious: 2, caution: 3, low: 4 };
+    const BRAND_SIGNALS = ["typosquat", "favicon_match", "brand_mismatch"];
+
+    let allScans = [];
+    let verdictFilter = "all";
+    let searchTerm = "";
+    let sortKey = "created_at";
+    let sortDir = "desc";
+    let page = 0;
+
+    function showDashboardError(message) {
+      showErrorBox(errorBox, message);
     }
 
     document.getElementById("logoutLink").addEventListener("click", async (event) => {
@@ -57,6 +266,8 @@
       await argusLogout();
       location.href = "index.html";
     });
+
+    /* ---------------------------------------------------------- export -- */
 
     async function downloadExport(path, format) {
       try {
@@ -79,10 +290,171 @@
         a.click();
         a.remove();
         URL.revokeObjectURL(url);
+        showToast(`${format.toUpperCase()} report downloaded`, "success");
       } catch (err) {
-        showError(err.message);
+        showDashboardError(err.message);
       }
     }
+
+    /* ------------------------------------------------------------ KPIs -- */
+
+    function renderKpis(scans) {
+      const phishing = scans.filter((s) => s.label === "phishing").length;
+      const legitimate = scans.length - phishing;
+      const meanConfidence =
+        scans.length > 0
+          ? scans.reduce((sum, s) => sum + (s.confidence || 0), 0) / scans.length
+          : 0;
+      const brandHits = scans.filter((s) =>
+        (s.signals || []).some((sig) => sig.triggered && BRAND_SIGNALS.includes(sig.name))
+      ).length;
+      const sources = new Set(scans.map((s) => s.source).filter(Boolean));
+
+      document.getElementById("kpiTotal").textContent = scans.length.toLocaleString();
+      document.getElementById("kpiThreats").textContent = phishing.toLocaleString();
+      document.getElementById("kpiSafe").textContent = legitimate.toLocaleString();
+      document.getElementById("kpiConfidence").textContent =
+        scans.length > 0 ? `${(meanConfidence * 100).toFixed(1)}%` : "—";
+      document.getElementById("kpiBrand").textContent = brandHits.toLocaleString();
+      document.getElementById("kpiSources").textContent = String(sources.size);
+
+      const pctThreats = scans.length > 0 ? Math.round((phishing / scans.length) * 100) : 0;
+      document.getElementById("kpiThreatsFoot").textContent = `${pctThreats}% of all scans`;
+      document.getElementById("kpiSafeFoot").textContent = `${100 - pctThreats}% of all scans`;
+      document.getElementById("kpiSourcesFoot").textContent =
+        sources.size > 0 ? [...sources].join(", ") : "No verdicts yet";
+    }
+
+    /** Live engine status from the existing /health probe. */
+    async function renderEngineStatus() {
+      const dot = document.getElementById("engineDot");
+      const label = document.getElementById("engineStatus");
+      try {
+        const resp = await fetch("/health");
+        const body = await resp.json();
+        const ok = resp.ok && body.status === "ok" && body.model_loaded;
+        dot.className = `status-dot ${ok ? "status-dot--ok" : "status-dot--warn"}`;
+        label.textContent = ok ? "Detection engine online" : "Model not loaded";
+      } catch (err) {
+        dot.className = "status-dot status-dot--danger";
+        label.textContent = "Engine unreachable";
+      }
+    }
+
+    /* ------------------------------------------------------ history UI -- */
+
+    function visibleScans() {
+      let rows = allScans;
+
+      if (verdictFilter !== "all") rows = rows.filter((s) => s.label === verdictFilter);
+      if (searchTerm) {
+        const needle = searchTerm.toLowerCase();
+        rows = rows.filter((s) => (s.url || "").toLowerCase().includes(needle));
+      }
+
+      const direction = sortDir === "asc" ? 1 : -1;
+      return [...rows].sort((a, b) => {
+        if (sortKey === "created_at") {
+          return (new Date(a.created_at || 0) - new Date(b.created_at || 0)) * direction;
+        }
+        if (sortKey === "risk_band") {
+          const rankA = BAND_RANK[a.risk_band] ?? 99;
+          const rankB = BAND_RANK[b.risk_band] ?? 99;
+          return (rankA - rankB) * direction;
+        }
+        return String(a[sortKey] || "").localeCompare(String(b[sortKey] || "")) * direction;
+      });
+    }
+
+    function renderHistory() {
+      const rows = visibleScans();
+      const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+      page = Math.min(page, pageCount - 1);
+      const pageRows = rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+      historyList.innerHTML = "";
+      historyEmpty.innerHTML = "";
+      historyEmpty.classList.toggle("hidden", rows.length > 0);
+
+      if (rows.length === 0) {
+        historyEmpty.appendChild(
+          allScans.length === 0
+            ? renderEmptyState(
+                "inbox",
+                "No scans yet",
+                "Scan a URL while signed in and it will show up here with full history and export."
+              )
+            : renderEmptyState("search", "No matching scans", "Try a different search term or filter.")
+        );
+      }
+
+      for (const scan of pageRows) {
+        historyList.appendChild(
+          renderHistoryRow(scan, (format) =>
+            downloadExport(`/scan/history/${scan.id}/export`, format)
+          )
+        );
+      }
+
+      const first = rows.length === 0 ? 0 : page * PAGE_SIZE + 1;
+      const last = Math.min((page + 1) * PAGE_SIZE, rows.length);
+      paginationInfo.textContent = `Showing ${first}–${last} of ${rows.length}`;
+      prevPage.disabled = page === 0;
+      nextPage.disabled = page >= pageCount - 1;
+
+      document.getElementById("historyCount").textContent =
+        `${allScans.length} scan${allScans.length === 1 ? "" : "s"} recorded`;
+    }
+
+    historySearch.addEventListener("input", () => {
+      searchTerm = historySearch.value.trim();
+      page = 0;
+      renderHistory();
+    });
+
+    for (const chip of document.querySelectorAll(".filter-chip")) {
+      chip.addEventListener("click", () => {
+        verdictFilter = chip.dataset.filter;
+        page = 0;
+        for (const other of document.querySelectorAll(".filter-chip")) {
+          other.setAttribute("aria-pressed", String(other === chip));
+        }
+        renderHistory();
+      });
+    }
+
+    for (const header of document.querySelectorAll("th.sortable")) {
+      header.addEventListener("click", () => {
+        const key = header.dataset.sort;
+        if (sortKey === key) {
+          sortDir = sortDir === "asc" ? "desc" : "asc";
+        } else {
+          sortKey = key;
+          sortDir = "desc";
+        }
+        for (const other of document.querySelectorAll("th.sortable")) {
+          other.setAttribute(
+            "aria-sort",
+            other === header ? (sortDir === "asc" ? "ascending" : "descending") : "none"
+          );
+        }
+        renderHistory();
+      });
+    }
+
+    prevPage.addEventListener("click", () => {
+      if (page > 0) {
+        page -= 1;
+        renderHistory();
+      }
+    });
+
+    nextPage.addEventListener("click", () => {
+      page += 1;
+      renderHistory();
+    });
+
+    /* ------------------------------------------------------------ init -- */
 
     async function init() {
       if (!argusIsLoggedIn()) {
@@ -98,6 +470,8 @@
         return;
       }
 
+      renderEngineStatus();
+
       try {
         const resp = await fetch("/scan/history?limit=200", {
           headers: { Authorization: `Bearer ${token}` },
@@ -107,32 +481,33 @@
           throw new Error(body.error || `Failed to load history (HTTP ${resp.status})`);
         }
 
-        const scans = body.scans || [];
+        allScans = body.scans || [];
 
+        // Every panel below is computed client-side from this one payload --
+        // there is no aggregation endpoint by design (DEC-033).
         const riskCounts = {};
         const sourceCounts = {};
-        for (const scan of scans) {
+        const signalCounts = {};
+        for (const scan of allScans) {
           riskCounts[scan.risk_band] = (riskCounts[scan.risk_band] || 0) + 1;
           sourceCounts[scan.source] = (sourceCounts[scan.source] || 0) + 1;
+          for (const signal of scan.signals || []) {
+            if (signal.triggered) {
+              signalCounts[signal.name] = (signalCounts[signal.name] || 0) + 1;
+            }
+          }
         }
-        renderBarList(riskBandBreakdown, riskCounts, riskBandLabel);
-        renderBarList(sourceBreakdown, sourceCounts);
 
-        historyList.innerHTML = "";
-        if (scans.length === 0) {
-          const empty = document.createElement("p");
-          empty.className = "meta";
-          empty.textContent = "No scans yet — scan a URL while logged in to see it here.";
-          historyList.appendChild(empty);
-        }
-        for (const scan of scans) {
-          const row = renderHistoryRow(scan, (format) =>
-            downloadExport(`/scan/history/${scan.id}/export`, format)
-          );
-          historyList.appendChild(row);
-        }
+        renderKpis(allScans);
+        renderBarList(riskBandBreakdown, riskCounts, riskBandLabel);
+        renderBarList(sourceBreakdown, sourceCounts, (key) => sourceMeta(key).label);
+        renderBarList(signalBreakdown, signalCounts, (key) =>
+          key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+        );
+        renderTimeline(timelineChart, allScans, 14);
+        renderHistory();
       } catch (err) {
-        showError(err.message);
+        showDashboardError(err.message);
       }
     }
 

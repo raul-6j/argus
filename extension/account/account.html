@@ -2,110 +2,130 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>ARGUS Account</title>
+  <link rel="stylesheet" href="../lib/argus-ui.css" />
   <link rel="stylesheet" href="account.css" />
 </head>
 <body>
-  <main class="card">
+  <main class="page">
     <header class="brand">
-      <span class="brand-icon" aria-hidden="true">🛡️</span>
-      <div>
-        <h1>ARGUS</h1>
-        <p class="tagline">Real-time phishing protection</p>
-      </div>
+      <span class="brand-mark" data-icon="shield-check" aria-hidden="true"></span>
+      <span class="brand-text">
+        <span class="brand-name">ARGUS</span>
+        <span class="brand-sub">Real-time phishing protection</span>
+      </span>
     </header>
 
-    <section id="loggedOutView">
-      <div class="tabs" id="authTabs" role="tablist">
-        <button id="tabSignup" class="tab active" type="button" role="tab" aria-selected="true">Sign Up</button>
-        <button id="tabLogin" class="tab" type="button" role="tab" aria-selected="false">Log In</button>
+    <div class="card">
+      <div class="card-body stack stack--lg">
+        <!-- Logged out ---------------------------------------------- -->
+        <section id="loggedOutView" class="stack stack--lg">
+          <div class="tabs" id="authTabs" role="tablist">
+            <button id="tabSignup" class="tab active" type="button" role="tab" aria-selected="true">Sign up</button>
+            <button id="tabLogin" class="tab" type="button" role="tab" aria-selected="false">Log in</button>
+          </div>
+
+          <form id="signupForm" class="panel stack">
+            <div class="field">
+              <label for="signupEmail">Email</label>
+              <input id="signupEmail" type="email" required autocomplete="email" placeholder="you@example.com" />
+            </div>
+            <div class="field">
+              <label for="signupPassword">Password</label>
+              <input
+                id="signupPassword"
+                type="password"
+                required
+                minlength="8"
+                autocomplete="new-password"
+                placeholder="Min 8 characters"
+              />
+              <p class="hint">
+                This password also encrypts your vault, client-side, before it's ever sent
+                anywhere (see <code>lib/crypto.js</code>). ARGUS cannot recover it for you
+                if you forget it.
+              </p>
+            </div>
+            <button type="submit" class="btn btn--primary btn--block" data-icon="user">Create account</button>
+          </form>
+
+          <form id="otpForm" class="panel stack hidden">
+            <div class="stack stack--sm">
+              <span class="eyebrow">Step 2 of 2</span>
+              <p class="hint">
+                Enter the 6-digit code sent to <strong id="otpEmailLabel"></strong>.
+              </p>
+            </div>
+            <div class="field">
+              <label for="otpCode">Verification code</label>
+              <input
+                id="otpCode"
+                type="text"
+                inputmode="numeric"
+                pattern="[0-9]{6}"
+                maxlength="6"
+                autocomplete="one-time-code"
+                required
+                placeholder="000000"
+                class="otp-input"
+              />
+            </div>
+            <button type="submit" class="btn btn--primary btn--block" data-icon="check">Verify</button>
+            <button id="backToSignup" type="button" class="btn--link">Use a different email</button>
+          </form>
+
+          <form id="loginForm" class="panel stack hidden">
+            <div class="field">
+              <label for="loginEmail">Email</label>
+              <input id="loginEmail" type="email" required autocomplete="email" placeholder="you@example.com" />
+            </div>
+            <div class="field">
+              <label for="loginPassword">Password</label>
+              <input id="loginPassword" type="password" required autocomplete="current-password" placeholder="••••••••" />
+            </div>
+            <button type="submit" class="btn btn--primary btn--block" data-icon="user">Log in</button>
+          </form>
+        </section>
+
+        <!-- Logged in ------------------------------------------------ -->
+        <section id="loggedInView" class="stack stack--lg hidden">
+          <div class="account-row">
+            <span class="avatar" id="avatarInitial" aria-hidden="true"></span>
+            <div class="account-identity">
+              <p class="signed-in-label">Signed in as</p>
+              <p class="signed-in-email" id="currentEmail"></p>
+            </div>
+            <button id="logoutBtn" type="button" class="btn btn--secondary btn--sm" data-icon="log-out">
+              Log out
+            </button>
+          </div>
+
+          <section class="well stack">
+            <div class="stack stack--sm">
+              <div class="row row--tight">
+                <span data-icon="lock" class="vault-icon" aria-hidden="true"></span>
+                <h2>Vault</h2>
+                <span class="badge">Synced allowlist</span>
+              </div>
+              <p class="hint">
+                One hostname per line. Encrypted with your password before it leaves this
+                device — see <code>lib/crypto.js</code>.
+              </p>
+            </div>
+
+            <textarea id="vaultTextarea" rows="8" placeholder="example.com&#10;another-site.org"></textarea>
+
+            <div class="btn-row">
+              <button id="vaultReloadBtn" type="button" class="btn btn--secondary" data-icon="refresh">Reload</button>
+              <button id="vaultSaveBtn" type="button" class="btn btn--primary" data-icon="save">Save</button>
+            </div>
+          </section>
+        </section>
+
+        <p id="status" class="status" role="status"></p>
       </div>
-
-      <form id="signupForm" class="panel">
-        <div class="field">
-          <label for="signupEmail">Email</label>
-          <input id="signupEmail" type="email" required autocomplete="email" placeholder="you@example.com" />
-        </div>
-        <div class="field">
-          <label for="signupPassword">Password</label>
-          <input
-            id="signupPassword"
-            type="password"
-            required
-            minlength="8"
-            autocomplete="new-password"
-            placeholder="Min 8 characters"
-          />
-          <p class="hint">
-            This password also encrypts your vault, client-side, before it's ever sent
-            anywhere (see <code>lib/crypto.js</code>). ARGUS cannot recover it for you if
-            you forget it.
-          </p>
-        </div>
-        <button type="submit" class="btn-primary">Create account</button>
-      </form>
-
-      <form id="otpForm" class="panel hidden">
-        <p class="step-label">Step 2 of 2</p>
-        <p class="step-copy">
-          Enter the 6-digit code sent to <strong id="otpEmailLabel"></strong>.
-        </p>
-        <div class="field">
-          <label for="otpCode">Verification code</label>
-          <input
-            id="otpCode"
-            type="text"
-            inputmode="numeric"
-            pattern="[0-9]{6}"
-            maxlength="6"
-            autocomplete="one-time-code"
-            required
-            placeholder="000000"
-            class="otp-input"
-          />
-        </div>
-        <button type="submit" class="btn-primary">Verify</button>
-        <button id="backToSignup" type="button" class="btn-link">Use a different email</button>
-      </form>
-
-      <form id="loginForm" class="panel hidden">
-        <div class="field">
-          <label for="loginEmail">Email</label>
-          <input id="loginEmail" type="email" required autocomplete="email" placeholder="you@example.com" />
-        </div>
-        <div class="field">
-          <label for="loginPassword">Password</label>
-          <input id="loginPassword" type="password" required autocomplete="current-password" placeholder="••••••••" />
-        </div>
-        <button type="submit" class="btn-primary">Log in</button>
-      </form>
-    </section>
-
-    <section id="loggedInView" class="hidden">
-      <div class="account-row">
-        <span class="avatar" id="avatarInitial" aria-hidden="true"></span>
-        <div>
-          <p class="signed-in-label">Signed in as</p>
-          <p class="signed-in-email" id="currentEmail"></p>
-        </div>
-        <button id="logoutBtn" type="button" class="btn-secondary">Log out</button>
-      </div>
-
-      <div class="vault-card">
-        <h2>Vault <span class="vault-subtitle">synced allowlist/blocklist</span></h2>
-        <p class="hint">
-          One hostname per line. Encrypted with your password before it leaves this
-          device — see <code>lib/crypto.js</code>.
-        </p>
-        <textarea id="vaultTextarea" rows="8" placeholder="example.com&#10;another-site.org"></textarea>
-        <div class="vault-actions">
-          <button id="vaultReloadBtn" type="button" class="btn-secondary">Reload</button>
-          <button id="vaultSaveBtn" type="button" class="btn-primary">Save</button>
-        </div>
-      </div>
-    </section>
-
-    <p id="status" class="status" role="status"></p>
+    </div>
   </main>
   <script type="module" src="account.js"></script>
 </body>

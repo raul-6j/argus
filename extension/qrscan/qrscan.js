@@ -20,7 +20,10 @@
  */
 
 import "../lib/browserCompat.js";
+import { icon, hydrateIcons, SIGNAL_ICONS } from "../lib/icons.js";
 import { isHttpUrl, originPatternFor } from "../lib/urlUtils.js";
+
+hydrateIcons();
 
 const unsupportedState = document.getElementById("unsupportedState");
 const supportedState = document.getElementById("supportedState");
@@ -78,6 +81,29 @@ function signalLabel(signal) {
   }
 }
 
+/**
+ * Swap a button into a busy state without destroying its inline icon.
+ * @param {HTMLButtonElement} button
+ * @param {boolean} busy
+ * @param {string} label
+ */
+function setBusy(button, busy, label) {
+  button.disabled = busy;
+  button.innerHTML = "";
+  if (busy) {
+    button.setAttribute("aria-busy", "true");
+    const spinner = document.createElement("span");
+    spinner.className = "spinner";
+    spinner.setAttribute("aria-hidden", "true");
+    button.appendChild(spinner);
+  } else {
+    button.removeAttribute("aria-busy");
+    const glyph = icon(button.dataset.icon);
+    if (glyph) button.appendChild(glyph);
+  }
+  button.appendChild(document.createTextNode(label));
+}
+
 function isBarcodeDetectorSupported() {
   return typeof window.BarcodeDetector !== "undefined";
 }
@@ -122,8 +148,7 @@ function handleDecodedText(text) {
 
 async function runScan(url) {
   scanErrorEl.classList.add("hidden");
-  scanBtn.disabled = true;
-  scanBtn.textContent = "Scanning...";
+  setBusy(scanBtn, true, "Scanning…");
   try {
     // The whole point of QR scanning is the destination the code encodes --
     // a hostname alone (e.g. of a URL shortener) tells the user nothing
@@ -141,19 +166,24 @@ async function runScan(url) {
     scanErrorEl.textContent = err.message;
     scanErrorEl.classList.remove("hidden");
   } finally {
-    scanBtn.disabled = false;
-    scanBtn.textContent = "Scan URL";
+    setBusy(scanBtn, false, "Scan URL");
   }
 }
 
 function renderResult(result) {
   resultPanel.classList.remove("hidden");
 
-  verdictBadgeEl.textContent = result.label === "phishing" ? "⚠ Phishing" : "✓ Legitimate";
   verdictBadgeEl.className = `verdict-badge ${result.label}`;
+  verdictBadgeEl.innerHTML = "";
+  const verdictIcon = icon(result.label === "phishing" ? "alert-triangle" : "check-circle");
+  if (verdictIcon) verdictBadgeEl.appendChild(verdictIcon);
+  verdictBadgeEl.appendChild(
+    document.createTextNode(result.label === "phishing" ? "Phishing" : "Legitimate")
+  );
 
   if (result.risk_band) {
     riskBandBadgeEl.textContent = _RISK_BAND_LABELS[result.risk_band] || result.risk_band;
+    riskBandBadgeEl.className = `risk-band-badge ${result.risk_band}`;
     riskBandBadgeEl.classList.remove("hidden");
   } else {
     riskBandBadgeEl.classList.add("hidden");
@@ -164,8 +194,11 @@ function renderResult(result) {
   for (const signal of triggered) {
     const badge = document.createElement("span");
     badge.className = `signal-badge ${signal.direction}`;
-    badge.textContent = signalLabel(signal);
-    badge.title = JSON.stringify(signal.evidence);
+    const glyph = icon(SIGNAL_ICONS[signal.name] || "activity");
+    if (glyph) badge.appendChild(glyph);
+    badge.appendChild(document.createTextNode(signalLabel(signal)));
+    badge.setAttribute("data-tooltip", JSON.stringify(signal.evidence, null, 2));
+    badge.tabIndex = 0;
     signalsPanelEl.appendChild(badge);
   }
 
@@ -194,8 +227,7 @@ async function handleFileUpload(file) {
 
 async function handleFetchRemoteImage(imageUrl) {
   resetDecodedUi();
-  fetchRemoteBtn.disabled = true;
-  fetchRemoteBtn.textContent = "Fetching...";
+  setBusy(fetchRemoteBtn, true, "Fetching…");
   try {
     const originPattern = originPatternFor(imageUrl);
     if (!originPattern) {
@@ -223,8 +255,7 @@ async function handleFetchRemoteImage(imageUrl) {
     decodeErrorEl.textContent = err.message;
     decodeErrorEl.classList.remove("hidden");
   } finally {
-    fetchRemoteBtn.disabled = false;
-    fetchRemoteBtn.textContent = "Fetch & Scan This Image";
+    setBusy(fetchRemoteBtn, false, "Fetch & scan this image");
   }
 }
 

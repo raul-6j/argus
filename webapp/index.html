@@ -1,48 +1,164 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark light" />
   <title>ARGUS — Scan a URL</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="wrap">
-    <header class="brand">
-      <span class="mark">🛡️</span>
-      <h1>ARGUS</h1>
-    </header>
-    <nav class="site-nav" id="siteNav">
-      <a href="index.html" class="active">Scan a URL</a>
-      <a href="login.html" id="navLogin">Log in / Sign up</a>
-      <a href="dashboard.html" id="navDashboard" class="hidden">Dashboard</a>
-      <a href="#" id="navLogout" class="hidden">Log out</a>
-    </nav>
-    <p class="tagline">Paste a URL to check it for phishing — no account or extension required.</p>
+  <a href="#main" class="visually-hidden">Skip to main content</a>
 
-    <form id="scanForm" class="scan-form">
-      <input id="urlInput" type="url" placeholder="https://example.com" required autofocus />
-      <button id="scanBtn" type="submit">Scan</button>
-    </form>
-    <p class="disclosure">
-      ARGUS's server fetches the page you submit to analyze it. Don't scan URLs containing
-      sensitive tokens or personal data in the path/query string.
-    </p>
+  <div class="app">
+    <!-- Sidebar ------------------------------------------------------- -->
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="index.html">
+        <span class="brand-mark" data-icon="shield-check" aria-hidden="true"></span>
+        <span class="brand-text">
+          <span class="brand-name">ARGUS</span>
+          <span class="brand-sub">Threat Detection</span>
+        </span>
+      </a>
 
-    <div id="errorBox" class="error-box hidden"></div>
-    <div id="reportCard" class="card hidden"></div>
+      <nav class="nav-section" id="siteNav" aria-label="Primary">
+        <span class="nav-label">Analysis</span>
+        <a href="index.html" class="nav-item active" aria-current="page" data-icon="search">Scan a URL</a>
+        <a href="dashboard.html" class="nav-item hidden" id="navDashboard" data-icon="dashboard">Dashboard</a>
+      </nav>
 
-    <footer>ARGUS — real-time phishing detection.</footer>
+      <div class="sidebar-footer">
+        <div class="nav-section">
+          <span class="nav-label">Account</span>
+          <a href="login.html" class="nav-item" id="navLogin" data-icon="log-in">Log in / Sign up</a>
+          <a href="#" class="nav-item hidden" id="navLogout" data-icon="log-out">Log out</a>
+        </div>
+        <div class="note">
+          <span class="status-dot status-dot--ok" aria-hidden="true"></span>
+          <span>Detection engine online</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main ---------------------------------------------------------- -->
+    <div class="app-main">
+      <header class="topbar">
+        <button
+          class="btn btn--ghost btn--icon sidebar-toggle"
+          id="sidebarToggle"
+          type="button"
+          aria-label="Toggle navigation"
+          aria-expanded="false"
+          aria-controls="sidebar"
+          data-icon="menu"
+        ></button>
+        <div class="topbar-titles">
+          <h1>URL Analysis</h1>
+          <p class="topbar-sub">Real-time phishing detection</p>
+        </div>
+        <div class="topbar-actions">
+          <span class="badge badge--accent" data-tooltip="Machine learning, threat intelligence, and brand-intelligence signals">
+            Multi-layer detection
+          </span>
+        </div>
+      </header>
+
+      <main class="content content--narrow" id="main">
+        <!-- Scan console -->
+        <section class="card">
+          <div class="card-header" data-icon="radar">
+            <h2>
+              Scan a URL
+              <span class="card-desc">No account or extension required</span>
+            </h2>
+          </div>
+          <div class="card-body stack">
+            <form id="scanForm" class="scan-form">
+              <span class="input-group" data-icon="link">
+                <label for="urlInput" class="visually-hidden">URL to scan</label>
+                <input
+                  id="urlInput"
+                  type="url"
+                  class="input--lg"
+                  placeholder="https://example.com"
+                  required
+                  autofocus
+                  spellcheck="false"
+                  autocomplete="off"
+                />
+              </span>
+              <button id="scanBtn" type="submit" class="btn btn--primary btn--lg" data-icon="search">Scan</button>
+            </form>
+
+            <p class="note" data-icon="info">
+              ARGUS's server fetches the page you submit to analyze it. Don't scan URLs
+              containing sensitive tokens or personal data in the path or query string.
+            </p>
+          </div>
+        </section>
+
+        <!-- Scan in flight -->
+        <section id="scanProgress" class="card hidden" aria-hidden="true">
+          <div class="scan-progress">
+            <div class="scan-progress-head">
+              <span class="spinner" aria-hidden="true"></span>
+              <span id="progressLabel">Analyzing URL…</span>
+            </div>
+            <div class="progress"><div class="progress-bar"></div></div>
+            <div class="stack stack--sm">
+              <div class="skeleton skeleton-text"></div>
+              <div class="skeleton skeleton-text"></div>
+              <div class="skeleton skeleton-text"></div>
+            </div>
+          </div>
+        </section>
+
+        <div id="errorBox" class="hidden" role="alert"></div>
+        <div id="reportCard" class="hidden"></div>
+
+        <!-- Static explainer of the detection stack. Purely descriptive — it
+             makes no claim the engine doesn't back up, and carries no data. -->
+        <section class="layer-grid" id="layerGrid" aria-label="How ARGUS analyzes a URL">
+          <article class="layer">
+            <span class="layer-icon" data-icon="database" aria-hidden="true"></span>
+            <h2>Threat Intelligence</h2>
+            <p>
+              Checked first against known-phishing feeds. A match short-circuits the
+              rest of the pipeline — no model inference needed.
+            </p>
+          </article>
+          <article class="layer">
+            <span class="layer-icon" data-icon="cpu" aria-hidden="true"></span>
+            <h2>Machine Learning</h2>
+            <p>
+              A trained classifier scores the URL and page on lexical, host, and
+              content features, with per-feature SHAP attribution.
+            </p>
+          </article>
+          <article class="layer">
+            <span class="layer-icon" data-icon="radar" aria-hidden="true"></span>
+            <h2>Brand Signals</h2>
+            <p>
+              Look-alike domains, favicon and logo matches, certificates, redirect
+              chains, and credential context, fused into one calibrated risk band.
+            </p>
+          </article>
+        </section>
+      </main>
+    </div>
   </div>
 
+  <script src="icons.js"></script>
   <script src="authClient.js"></script>
   <script src="report.js"></script>
+  <script src="shell.js"></script>
   <script>
     const form = document.getElementById("scanForm");
     const urlInput = document.getElementById("urlInput");
     const scanBtn = document.getElementById("scanBtn");
     const errorBox = document.getElementById("errorBox");
     const reportCard = document.getElementById("reportCard");
+    const scanProgress = document.getElementById("scanProgress");
     const navLogin = document.getElementById("navLogin");
     const navDashboard = document.getElementById("navDashboard");
     const navLogout = document.getElementById("navLogout");
@@ -62,8 +178,9 @@
       event.preventDefault();
       errorBox.classList.add("hidden");
       reportCard.classList.add("hidden");
-      scanBtn.disabled = true;
-      scanBtn.textContent = "Scanning...";
+      scanProgress.classList.remove("hidden");
+      scanProgress.setAttribute("aria-hidden", "false");
+      setButtonBusy(scanBtn, true, "Scanning…");
 
       try {
         // Attaching a token when logged in is opportunistic (@optional_auth
@@ -89,11 +206,13 @@
           throw new Error(body.error || `Scan failed (HTTP ${resp.status})`);
         }
         renderReportCard(reportCard, body);
+        reportCard.scrollIntoView({ behavior: "smooth", block: "start" });
       } catch (err) {
-        showError(errorBox, err.message);
+        showErrorBox(errorBox, err.message);
       } finally {
-        scanBtn.disabled = false;
-        scanBtn.textContent = "Scan";
+        scanProgress.classList.add("hidden");
+        scanProgress.setAttribute("aria-hidden", "true");
+        setButtonBusy(scanBtn, false, "Scan");
       }
     });
   </script>

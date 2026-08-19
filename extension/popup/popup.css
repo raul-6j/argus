@@ -1,192 +1,286 @@
+/* ARGUS popup — layout only. Every colour, radius, font and spacing value
+   comes from ../lib/argus-ui.css, which must be linked first. */
+
 body {
-  font-family: system-ui, -apple-system, sans-serif;
-  width: 320px;
-  margin: 0;
-  color: #1a1a1a;
+  width: 360px;
+  /* A popup can't scroll its own chrome, so cap the height and let the body
+     scroll instead of letting the browser clip a long deep-scan result. */
+  max-height: 580px;
+  overflow-y: auto;
 }
 
-main {
-  padding: 1rem;
-}
+/* ---------------------------------------------------------------- header -- */
 
-header {
+.popup-header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  margin-bottom: 0.75rem;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-alt);
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
-h1 {
-  font-size: 1rem;
-  margin: 0;
+/* The site under inspection — always visible, above every state. */
+.site-strip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
 }
+
+.site-icon { color: var(--text-muted); display: flex; }
+.site-icon svg { width: 13px; height: 13px; }
 
 .hostname {
-  font-size: 0.75rem;
-  color: #666;
-  max-width: 180px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
 }
 
-/* !important is deliberate: .hidden must always win over any other class's
-   display value on the same element (e.g. .deep-scan-consent/.signals-panel's
-   display: flex, both declared later in this file), regardless of order. */
-.hidden {
-  display: none !important;
+/* ------------------------------------------------------------------ body -- */
+
+.popup-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
 }
 
-.verdict {
-  font-size: 1.4rem;
-  font-weight: 700;
-  padding: 0.5rem 0;
+.scan-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 
-.verdict.phishing {
-  color: #c62828;
+.scan-status .spinner { color: var(--accent); }
+
+/* --------------------------------------------------------------- verdict -- */
+
+.verdict-block {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
 }
 
-.verdict.legitimate {
-  color: #2e7d32;
+.verdict-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-width: 0;
 }
 
 .confidence {
-  font-size: 0.85rem;
-  color: #444;
-  margin-bottom: 0.75rem;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
-.risk-band-badge {
-  display: inline-block;
-  font-size: 0.68rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  padding: 0.15rem 0.5rem;
-  border-radius: 999px;
-  margin-bottom: 0.4rem;
+/* Compact radial indicator. Shows the risk score after a deep scan, and the
+   model's confidence before one (labelled accordingly in popup.js). */
+.verdict-ring {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  flex-shrink: 0;
 }
 
-.risk-band-badge.low { background: #e8f5e9; color: #2e7d32; }
-.risk-band-badge.caution { background: #f5f6d8; color: #9aa000; }
-.risk-band-badge.suspicious { background: #fdf0dc; color: #b06a00; }
-.risk-band-badge.high { background: #fbe4d8; color: #c1440e; }
-.risk-band-badge.critical { background: #fdecea; color: #c62828; }
-
-button {
-  padding: 0.4rem 0.9rem;
-  font-size: 0.85rem;
-  cursor: pointer;
+.verdict-ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
 }
 
-.shap-panel {
-  margin-top: 0.75rem;
-  border-top: 1px solid #eee;
-  padding-top: 0.5rem;
+.ring-track {
+  fill: none;
+  stroke: var(--bg-alt);
+  stroke-width: 8;
 }
+
+.ring-arc {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 8;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 800ms var(--ease-out), stroke var(--duration) var(--ease);
+}
+
+.ring-arc.phishing   { stroke: var(--phishing); }
+.ring-arc.legitimate { stroke: var(--legitimate); }
+.ring-arc.low        { stroke: var(--band-low); }
+.ring-arc.caution    { stroke: var(--band-caution); }
+.ring-arc.suspicious { stroke: var(--band-suspicious); }
+.ring-arc.high       { stroke: var(--band-high); }
+.ring-arc.critical   { stroke: var(--band-critical); }
+
+.ring-value {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------- panels -- */
+
+/* A disclosed region (deep-scan result, SHAP, recent scans). */
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+  animation: fade-slide-in var(--duration-slow) var(--ease-out);
+}
+
+.plain-explanation {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  line-height: var(--leading-relaxed);
+}
+
+.deep-scan-consent { padding: var(--space-3); background: var(--bg-alt); border: 1px solid var(--border); border-radius: var(--radius-md); }
+
+.consent-sub {
+  display: block;
+  font-size: var(--text-2xs);
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* ------------------------------------------------------------ SHAP rows -- */
 
 .shap-row {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.78rem;
-  margin: 0.3rem 0;
+  gap: var(--space-3);
+  font-size: var(--text-2xs);
 }
 
 .shap-feature {
   flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
 }
 
+/* Signed bar: the centre line is 0, right pushes toward phishing, left
+   toward legitimate — matching the sign of the SHAP value. */
 .shap-bar-track {
-  flex: 0 0 100px;
+  flex: 0 0 96px;
   height: 8px;
-  background: #eee;
-  border-radius: 4px;
+  background: var(--bg-alt);
+  border-radius: var(--radius-full);
   overflow: hidden;
   position: relative;
+}
+
+.shap-bar-track::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border-strong);
 }
 
 .shap-bar {
   position: absolute;
   top: 0;
   bottom: 0;
-  border-radius: 4px;
+  border-radius: var(--radius-full);
+  transition: width 700ms var(--ease-out);
 }
 
 .shap-bar.toward-phishing {
-  background: #c62828;
+  background: var(--phishing);
   left: 50%;
 }
 
 .shap-bar.away-from-phishing {
-  background: #2e7d32;
+  background: var(--legitimate);
   right: 50%;
 }
 
-#errorMessage {
-  font-size: 0.85rem;
-  color: #c62828;
-}
+/* ---------------------------------------------------------- recent scans -- */
 
-.button-row {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.deep-scan-consent {
+.recent-toggle {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.75rem;
-  color: #444;
-  margin: 0.4rem 0;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  transition: color var(--duration) var(--ease);
 }
 
-.deep-scan-panel {
-  margin-top: 0.5rem;
-  border-top: 1px solid #eee;
-  padding-top: 0.5rem;
-}
+.recent-toggle:hover { color: var(--text-secondary); }
+.recent-toggle svg { width: 13px; height: 13px; }
+.recent-title { flex: 1; text-align: left; }
 
-.signals-panel {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  margin-bottom: 0.5rem;
-}
+.recent-chevron { transition: transform var(--duration) var(--ease); }
+.recent-toggle[aria-expanded="true"] .recent-chevron { transform: rotate(180deg); }
 
-.signal-badge {
-  display: inline-block;
-  font-size: 0.72rem;
-  padding: 0.2rem 0.5rem;
-  border-radius: 999px;
-  background: #f0f0f0;
-  color: #333;
-}
-
-.signal-badge.phishing {
-  background: #fdecea;
-  color: #c62828;
-}
-
-.signal-badge.legitimate {
-  background: #e8f5e9;
-  color: #2e7d32;
-}
-
-.signal-badge.neutral {
-  background: #f0f0f0;
-  color: #666;
-}
-
-.plain-explanation {
-  font-size: 0.8rem;
-  color: #333;
-  line-height: 1.3;
+.recent-list {
+  list-style: none;
   margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  animation: fade-slide-in var(--duration-slow) var(--ease-out);
+}
+
+.recent-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+  min-width: 0;
+}
+
+.recent-list li:last-child { border-bottom: none; }
+
+.recent-host {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-when {
+  font-size: var(--text-2xs);
+  color: var(--text-muted);
+  white-space: nowrap;
 }

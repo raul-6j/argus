@@ -2,67 +2,123 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>ARGUS — Scan QR Code</title>
+  <link rel="stylesheet" href="../lib/argus-ui.css" />
   <link rel="stylesheet" href="qrscan.css" />
 </head>
 <body>
-  <main>
-    <header>
-      <span class="shield">🛡️</span>
-      <h1>Scan a QR Code with ARGUS</h1>
+  <main class="page">
+    <header class="page-header">
+      <div class="brand">
+        <span class="brand-mark" data-icon="qr-code" aria-hidden="true"></span>
+        <span class="brand-text">
+          <span class="brand-name">ARGUS</span>
+          <span class="brand-sub">QR Scanner</span>
+        </span>
+      </div>
     </header>
 
-    <section id="unsupportedState" class="state hidden">
-      <p class="error-text">
-        QR scanning needs your browser's built-in barcode detector (the Shape
-        Detection API), which isn't available here. Try a recent version of
-        Chrome on desktop.
+    <div class="stack stack--sm">
+      <h1 class="page-title">Scan a QR code</h1>
+      <p class="hint">
+        Check where a QR code actually leads before you visit it. Decoding happens
+        entirely on this device.
       </p>
+    </div>
+
+    <!-- Unsupported ---------------------------------------------------- -->
+    <section id="unsupportedState" class="state hidden">
+      <div class="alert alert--warning" data-icon="alert-triangle">
+        <span>
+          QR scanning needs your browser's built-in barcode detector (the Shape
+          Detection API), which isn't available here. Try a recent version of
+          Chrome on desktop.
+        </span>
+      </div>
     </section>
 
+    <!-- Supported ------------------------------------------------------ -->
     <section id="supportedState" class="state hidden">
-      <section class="upload-section">
-        <label for="fileInput" class="upload-label">Choose a QR code image</label>
-        <input id="fileInput" type="file" accept="image/*" />
-        <p class="hint">Decoded entirely on your device — nothing is uploaded yet.</p>
+      <!-- Upload -->
+      <section class="card">
+        <div class="card-header" data-icon="upload">
+          <h2>
+            Upload an image
+            <span class="card-desc">Decoded on your device — nothing is uploaded yet</span>
+          </h2>
+        </div>
+        <div class="card-body stack">
+          <div class="field">
+            <label for="fileInput">Choose a QR code image</label>
+            <input id="fileInput" type="file" accept="image/*" />
+          </div>
+          <img id="localPreview" class="preview hidden" alt="Selected image preview" />
+        </div>
       </section>
 
-      <section id="remoteImageSection" class="remote-image-section hidden">
-        <p class="hint">Image selected from the page you right-clicked:</p>
-        <img id="remotePreview" alt="Selected image" />
-        <button id="fetchRemoteBtn" type="button">Fetch &amp; Scan This Image</button>
-        <p class="hint">
-          Fetching a third-party image may prompt for one-time permission to
-          contact that site.
-        </p>
+      <!-- Remote image (right-click entry point) -->
+      <section id="remoteImageSection" class="card hidden">
+        <div class="card-header" data-icon="image">
+          <h2>
+            Image from the page you right-clicked
+            <span class="card-desc">Fetched only after you confirm</span>
+          </h2>
+        </div>
+        <div class="card-body stack">
+          <img id="remotePreview" class="preview" alt="Selected image" />
+          <div class="row">
+            <button id="fetchRemoteBtn" type="button" class="btn btn--primary" data-icon="download">
+              Fetch &amp; scan this image
+            </button>
+          </div>
+          <p class="note" data-icon="info">
+            Fetching a third-party image may prompt for one-time permission to contact
+            that site.
+          </p>
+        </div>
       </section>
-
-      <img id="localPreview" class="hidden" alt="Selected image preview" />
 
       <p id="decodeError" class="error-text hidden"></p>
 
-      <section id="decodedSection" class="decoded-section hidden">
-        <p class="hint">Decoded content:</p>
-        <p id="decodedUrl" class="decoded-url"></p>
-        <p id="notAUrlNote" class="hint hidden">
-          This QR code doesn't contain a web URL — there's nothing to scan.
-        </p>
-
-        <div id="scanConsentRow" class="hidden">
-          <label class="checkbox-row">
-            <input id="scanConsent" type="checkbox" />
-            I understand this URL will be sent to ARGUS's API for analysis
-          </label>
-          <button id="scanBtn" type="button" disabled>Scan URL</button>
+      <!-- Decoded result -->
+      <section id="decodedSection" class="card hidden">
+        <div class="card-header" data-icon="link">
+          <h2>
+            Decoded content
+            <span class="card-desc">What this QR code actually points to</span>
+          </h2>
         </div>
+        <div class="card-body stack">
+          <p id="decodedUrl" class="decoded-url"></p>
 
-        <div id="resultPanel" class="result-panel hidden">
-          <span id="verdictBadge" class="verdict-badge"></span>
-          <span id="riskBandBadge" class="risk-band-badge"></span>
-          <div id="signalsPanel" class="signals-panel"></div>
-          <p id="plainExplanation" class="plain-explanation"></p>
+          <p id="notAUrlNote" class="note hidden" data-icon="info">
+            This QR code doesn't contain a web URL — there's nothing to scan.
+          </p>
+
+          <div id="scanConsentRow" class="stack hidden">
+            <label class="checkbox-row">
+              <input id="scanConsent" type="checkbox" />
+              <span>I understand this URL will be sent to ARGUS's API for analysis</span>
+            </label>
+            <div class="row">
+              <button id="scanBtn" type="button" class="btn btn--primary" data-icon="search" disabled>
+                Scan URL
+              </button>
+            </div>
+          </div>
+
+          <div id="resultPanel" class="well stack hidden">
+            <div class="row row--tight">
+              <span id="verdictBadge" class="verdict-badge"></span>
+              <span id="riskBandBadge" class="risk-band-badge"></span>
+            </div>
+            <div id="signalsPanel" class="signals-panel"></div>
+            <p id="plainExplanation" class="plain-explanation"></p>
+          </div>
+
+          <p id="scanError" class="error-text hidden"></p>
         </div>
-        <p id="scanError" class="error-text hidden"></p>
       </section>
     </section>
   </main>

@@ -2,83 +2,164 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>ARGUS — Warning</title>
+  <link rel="stylesheet" href="../lib/argus-ui.css" />
   <link rel="stylesheet" href="interstitial.css" />
 </head>
 <body>
-  <main>
-    <section id="loadingState" class="state">Loading warning details...</section>
-
-    <section id="missingState" class="state hidden">
-      <h1>⚠ Warning details unavailable</h1>
-      <p>
-        This warning's details are no longer available (the browser may have
-        restarted, or this page was opened directly). You can still navigate
-        away safely.
-      </p>
-      <button id="goBackMissing" type="button">Go Back</button>
+  <main class="page">
+    <!-- Loading ------------------------------------------------------- -->
+    <section id="loadingState" class="state">
+      <div class="card">
+        <div class="card-body stack">
+          <div class="row">
+            <span class="spinner" aria-hidden="true"></span>
+            <span class="muted">Loading warning details…</span>
+          </div>
+          <div class="skeleton skeleton-block"></div>
+        </div>
+      </div>
     </section>
 
-    <section id="warningState" class="state hidden">
-      <header>
-        <span class="shield">🛡️</span>
-        <h1>ARGUS blocked a potentially dangerous site</h1>
-      </header>
-
-      <p class="hostname" id="hostname"></p>
-      <p class="summary">
-        <span id="verdictBadge" class="verdict-badge"></span>
-        <span id="confidence" class="confidence"></span>
-      </p>
-      <p class="source-note" id="sourceNote"></p>
-
-      <div class="button-row primary-row">
-        <button id="goBackBtn" type="button" class="primary">Go Back to Safety</button>
-        <button id="viewTechnicalBtn" type="button" class="secondary">View Technical Analysis</button>
-      </div>
-
-      <section id="technicalPanel" class="technical-panel hidden">
-        <p class="hint">
-          Running a Deep Scan sends the <strong>full URL</strong> (not just
-          the hostname) to ARGUS's API for a richer, page-content-aware
-          analysis (brand impersonation, credential harvesting, hosting
-          platform risk, and more).
-        </p>
-        <label class="checkbox-row">
-          <input id="deepScanConsent" type="checkbox" />
-          I understand the full URL will be sent for a deeper analysis
-        </label>
-        <button id="runDeepScanBtn" type="button" disabled>Run Deep Scan</button>
-        <div id="deepScanResult" class="deep-scan-result hidden">
-          <span id="riskBandBadge" class="risk-band-badge"></span>
-          <div id="signalsPanel" class="signals-panel"></div>
-          <p id="plainExplanation" class="plain-explanation"></p>
-        </div>
-        <p id="deepScanError" class="error-text hidden"></p>
-      </section>
-
-      <section class="danger-zone">
-        <h2>Continue anyway</h2>
-        <p class="hint">
-          Only continue if you're confident this warning is wrong. This
-          choice is recorded locally on your device (never sent to ARGUS)
-          so you can review it later in the extension's settings.
-        </p>
-        <label class="checkbox-row">
-          <input id="understandRisk" type="checkbox" />
-          I understand the risks of visiting this site
-        </label>
-        <label class="checkbox-row">
-          <input id="alsoAllowlist" type="checkbox" />
-          Don't warn me about this site again
-        </label>
-        <div class="button-row">
-          <button id="continueBtn" type="button" class="danger" disabled>Continue Anyway</button>
-          <button id="allowlistOnlyBtn" type="button" class="secondary">
-            Add to allowlist without continuing
+    <!-- Details unavailable ------------------------------------------- -->
+    <section id="missingState" class="state hidden">
+      <div class="card">
+        <div class="card-body stack stack--lg">
+          <div class="brand">
+            <span class="brand-mark" data-icon="help-circle" aria-hidden="true"></span>
+            <span class="brand-text">
+              <span class="brand-name">ARGUS</span>
+              <span class="brand-sub">Warning</span>
+            </span>
+          </div>
+          <div class="stack stack--sm">
+            <h1>Warning details unavailable</h1>
+            <p class="hint">
+              This warning's details are no longer available (the browser may have
+              restarted, or this page was opened directly). You can still navigate
+              away safely.
+            </p>
+          </div>
+          <button id="goBackMissing" type="button" class="btn btn--primary" data-icon="arrow-left">
+            Go back
           </button>
         </div>
-        <p id="continueStatus" class="status-text"></p>
+      </div>
+    </section>
+
+    <!-- Warning -------------------------------------------------------- -->
+    <section id="warningState" class="state hidden">
+      <!-- Hero: the one thing that must be unmissable. -->
+      <section class="warning-hero animate-scale">
+        <span class="hero-icon" data-icon="shield-alert" aria-hidden="true"></span>
+        <div class="hero-copy">
+          <span class="eyebrow hero-eyebrow">Blocked by ARGUS</span>
+          <h1>This site may be trying to steal your information</h1>
+          <p class="hero-sub">
+            ARGUS flagged this page before it finished loading. Continuing could expose
+            your passwords, payment details, or personal data.
+          </p>
+        </div>
+      </section>
+
+      <!-- Target summary -->
+      <section class="card">
+        <div class="card-body stack">
+          <div class="stack stack--sm">
+            <span class="eyebrow">Blocked destination</span>
+            <p class="hostname" id="hostname"></p>
+          </div>
+          <div class="row row--tight">
+            <span id="verdictBadge" class="verdict-badge phishing"></span>
+            <span id="confidence" class="confidence"></span>
+          </div>
+          <p class="note" id="sourceNote" data-icon="info"></p>
+        </div>
+      </section>
+
+      <!-- Primary actions -->
+      <div class="btn-row primary-row">
+        <button id="goBackBtn" type="button" class="btn btn--primary btn--lg" data-icon="arrow-left">
+          Go back to safety
+        </button>
+        <button id="viewTechnicalBtn" type="button" class="btn btn--secondary btn--lg" data-icon="radar">
+          View technical analysis
+        </button>
+      </div>
+
+      <!-- Technical analysis -->
+      <section id="technicalPanel" class="card technical-panel hidden">
+        <div class="card-header" data-icon="radar">
+          <h2>
+            Technical Analysis
+            <span class="card-desc">Optional deeper inspection of this page</span>
+          </h2>
+        </div>
+        <div class="card-body stack">
+          <p class="note" data-icon="info">
+            <span>
+              Running a Deep Scan sends the <strong>full URL</strong> (not just the
+              hostname) to ARGUS's API for a richer, page-content-aware analysis —
+              brand impersonation, credential harvesting, hosting platform risk, and more.
+            </span>
+          </p>
+
+          <label class="checkbox-row">
+            <input id="deepScanConsent" type="checkbox" />
+            <span>I understand the full URL will be sent for a deeper analysis</span>
+          </label>
+
+          <div class="row">
+            <button id="runDeepScanBtn" type="button" class="btn btn--secondary" data-icon="zap" disabled>
+              Run Deep Scan
+            </button>
+          </div>
+
+          <div id="deepScanResult" class="well stack hidden">
+            <span id="riskBandBadge" class="risk-band-badge"></span>
+            <div id="signalsPanel" class="signals-panel"></div>
+            <p id="plainExplanation" class="plain-explanation"></p>
+          </div>
+
+          <p id="deepScanError" class="error-text hidden"></p>
+        </div>
+      </section>
+
+      <!-- Danger zone -->
+      <section class="card danger-zone">
+        <div class="card-header" data-icon="alert-triangle">
+          <h2>
+            Continue anyway
+            <span class="card-desc">Only if you're confident this warning is wrong</span>
+          </h2>
+        </div>
+        <div class="card-body stack">
+          <p class="hint">
+            This choice is recorded locally on your device (never sent to ARGUS) so you
+            can review it later in the extension's settings.
+          </p>
+
+          <label class="checkbox-row">
+            <input id="understandRisk" type="checkbox" />
+            <span>I understand the risks of visiting this site</span>
+          </label>
+          <label class="checkbox-row">
+            <input id="alsoAllowlist" type="checkbox" />
+            <span>Don't warn me about this site again</span>
+          </label>
+
+          <div class="btn-row">
+            <button id="continueBtn" type="button" class="btn btn--danger" disabled>
+              Continue anyway
+            </button>
+            <button id="allowlistOnlyBtn" type="button" class="btn btn--ghost">
+              Add to allowlist without continuing
+            </button>
+          </div>
+
+          <p id="continueStatus" class="status-text" role="status"></p>
+        </div>
       </section>
     </section>
   </main>

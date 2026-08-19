@@ -12,7 +12,10 @@
  */
 
 import "../lib/browserCompat.js";
+import { icon, hydrateIcons, SIGNAL_ICONS } from "../lib/icons.js";
 import { addToAllowlist } from "../lib/protectionSettings.js";
+
+hydrateIcons();
 
 const loadingState = document.getElementById("loadingState");
 const missingState = document.getElementById("missingState");
@@ -79,6 +82,29 @@ function signalLabel(signal) {
   }
 }
 
+/**
+ * Swap a button into a busy state without destroying its inline icon.
+ * @param {HTMLButtonElement} button
+ * @param {boolean} busy
+ * @param {string} label
+ */
+function setBusy(button, busy, label) {
+  button.disabled = busy;
+  button.innerHTML = "";
+  if (busy) {
+    button.setAttribute("aria-busy", "true");
+    const spinner = document.createElement("span");
+    spinner.className = "spinner";
+    spinner.setAttribute("aria-hidden", "true");
+    button.appendChild(spinner);
+  } else {
+    button.removeAttribute("aria-busy");
+    const glyph = icon(button.dataset.icon);
+    if (glyph) button.appendChild(glyph);
+  }
+  button.appendChild(document.createTextNode(label));
+}
+
 async function sendMessage(message) {
   const response = await chrome.runtime.sendMessage(message);
   if (!response.ok) {
@@ -106,8 +132,13 @@ async function init() {
   const { url, hostname, result } = pending;
 
   hostnameEl.textContent = hostname;
-  verdictBadgeEl.textContent = result.label === "phishing" ? "⚠ Phishing" : "Flagged";
-  confidenceEl.textContent = `Confidence: ${(result.confidence * 100).toFixed(1)}%`;
+  verdictBadgeEl.innerHTML = "";
+  const verdictIcon = icon("alert-triangle");
+  if (verdictIcon) verdictBadgeEl.appendChild(verdictIcon);
+  verdictBadgeEl.appendChild(
+    document.createTextNode(result.label === "phishing" ? "Phishing" : "Flagged")
+  );
+  confidenceEl.textContent = `Confidence · ${(result.confidence * 100).toFixed(1)}%`;
   sourceNoteEl.textContent =
     result.source === "phishtank"
       ? "Matched a known-phishing entry in ARGUS's threat-intelligence feed."
@@ -119,7 +150,9 @@ async function init() {
   goBackMissingBtn.addEventListener("click", () => history.back());
 
   viewTechnicalBtn.addEventListener("click", () => {
-    technicalPanel.classList.toggle("hidden");
+    const nowHidden = technicalPanel.classList.toggle("hidden");
+    viewTechnicalBtn.setAttribute("aria-expanded", String(!nowHidden));
+    if (!nowHidden) technicalPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
   });
 
   deepScanConsent.addEventListener("change", () => {
@@ -128,8 +161,7 @@ async function init() {
 
   runDeepScanBtn.addEventListener("click", async () => {
     deepScanErrorEl.classList.add("hidden");
-    runDeepScanBtn.disabled = true;
-    runDeepScanBtn.textContent = "Scanning...";
+    setBusy(runDeepScanBtn, true, "Scanning…");
     try {
       // Explicit, user-initiated, opted-in full-URL scan -- mirrors the
       // popup's existing Deep Scan pattern exactly (DEC-D). The passive
@@ -141,8 +173,7 @@ async function init() {
       deepScanErrorEl.textContent = err.message;
       deepScanErrorEl.classList.remove("hidden");
     } finally {
-      runDeepScanBtn.disabled = false;
-      runDeepScanBtn.textContent = "Run Deep Scan";
+      setBusy(runDeepScanBtn, false, "Run Deep Scan");
     }
   });
 
@@ -163,6 +194,7 @@ async function init() {
       // to render here.
     } catch (err) {
       continueStatusEl.textContent = err.message;
+      continueStatusEl.classList.add("status-text--error");
       continueBtn.disabled = false;
     }
   });
@@ -170,7 +202,10 @@ async function init() {
   allowlistOnlyBtn.addEventListener("click", async () => {
     allowlistOnlyBtn.disabled = true;
     await addToAllowlist(hostname);
-    allowlistOnlyBtn.textContent = "Added to allowlist";
+    allowlistOnlyBtn.innerHTML = "";
+    const glyph = icon("check");
+    if (glyph) allowlistOnlyBtn.appendChild(glyph);
+    allowlistOnlyBtn.appendChild(document.createTextNode("Added to allowlist"));
   });
 }
 
@@ -179,6 +214,7 @@ function renderDeepScanResult(result) {
 
   if (result.risk_band) {
     riskBandBadgeEl.textContent = _RISK_BAND_LABELS[result.risk_band] || result.risk_band;
+    riskBandBadgeEl.className = `risk-band-badge ${result.risk_band}`;
     riskBandBadgeEl.classList.remove("hidden");
   } else {
     riskBandBadgeEl.classList.add("hidden");
@@ -189,14 +225,21 @@ function renderDeepScanResult(result) {
   for (const signal of triggered) {
     const badge = document.createElement("span");
     badge.className = `signal-badge ${signal.direction}`;
-    badge.textContent = signalLabel(signal);
-    badge.title = JSON.stringify(signal.evidence);
+    const glyph = icon(SIGNAL_ICONS[signal.name] || "activity");
+    if (glyph) badge.appendChild(glyph);
+    badge.appendChild(document.createTextNode(signalLabel(signal)));
+    badge.setAttribute("data-tooltip", JSON.stringify(signal.evidence, null, 2));
+    badge.tabIndex = 0;
     signalsPanelEl.appendChild(badge);
   }
   if (triggered.length === 0) {
     const badge = document.createElement("span");
-    badge.className = "signal-badge";
-    badge.textContent = "No additional brand-intelligence signals triggered";
+    badge.className = "signal-badge neutral";
+    const glyph = icon("check");
+    if (glyph) badge.appendChild(glyph);
+    badge.appendChild(
+      document.createTextNode("No additional brand-intelligence signals triggered")
+    );
     signalsPanelEl.appendChild(badge);
   }
 
