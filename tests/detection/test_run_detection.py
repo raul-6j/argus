@@ -183,6 +183,41 @@ class TestSuccessfulPageFetch:
         assert platform_sig.evidence["platform"] == "wixstudio.com"
 
 
+class TestCertRedirectRegression:
+    """End-to-end regression for the mail.google.com false positive: a
+    same-provider redirect (mail.google.com -> accounts.google.com) whose
+    final-hop cert covers the final host but not the originally-requested
+    one must not push the fused verdict to phishing on cert_intel alone."""
+
+    def test_gmail_style_redirect_stays_legitimate(self):
+        cert = {
+            "subject": [[["commonName", "accounts.google.com"]]],
+            "issuer": [[["organizationName", "Google Trust Services"]]],
+            "not_before": "Jan 01 00:00:00 2026 GMT",
+            "san": ["accounts.google.com", "mtls.accounts.google.com"],
+        }
+        html = "<html><head><title>Sign in - Google Accounts</title></head><body></body></html>"
+        artifacts = PageArtifacts(
+            requested_url="https://mail.google.com/mail/u/0/#inbox",
+            final_url="https://accounts.google.com/ServiceLogin?service=mail",
+            redirect_chain=["https://mail.google.com/mail/u/0/"],
+            html=html,
+            tls_cert=cert,
+        )
+        v = run_detection(
+            "https://mail.google.com/mail/u/0/#inbox",
+            model_proba=0.05,
+            page_artifacts=artifacts,
+            html_features={},
+            brand_index=BrandIndex(),
+            config=_CONFIG,
+        )
+        cert_sig = next(s for s in v.signals if s.name == "cert_intel")
+        assert cert_sig.triggered is False
+        assert v.label == "legitimate"
+        assert v.risk_score < 0.1
+
+
 class TestSignalIsolation:
     def test_one_signal_raising_does_not_sink_the_others(self):
         html = "<html><head><title>PayPal Login</title></head><body><input type=password></body></html>"

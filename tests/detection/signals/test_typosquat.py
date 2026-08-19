@@ -67,6 +67,39 @@ class TestCombosquat:
         assert sig.triggered is False
 
 
+class TestBrandVsBrandCollision:
+    """A domain that is itself another cataloged brand's own verified
+    domain must never be flagged as impersonating a third brand -- found
+    live: github.com ("github", 6-char root) sits at Damerau-Levenshtein
+    distance 2 from GitLab's "gitlab" root, past the short-root guard
+    below (which only covers roots under 5 chars), and was flagged as a
+    GitLab typosquat."""
+
+    def _brands(self) -> BrandIndex:
+        return BrandIndex(
+            brands=(
+                Brand(name="GitHub", domains=("github.com",), aliases=("github",)),
+                Brand(name="GitLab", domains=("gitlab.com",), aliases=("gitlab",)),
+            )
+        )
+
+    def test_github_does_not_trigger_as_gitlab_typosquat(self):
+        sig = typosquat.evaluate("https://github.com", self._brands(), max_edit_distance=2)
+        assert sig.triggered is False
+
+    def test_gitlab_does_not_trigger_as_github_typosquat(self):
+        sig = typosquat.evaluate("https://gitlab.com", self._brands(), max_edit_distance=2)
+        assert sig.triggered is False
+
+    def test_genuine_typosquat_of_a_cataloged_brand_still_triggers(self):
+        """The exemption is scoped to domains that are THEMSELVES a
+        cataloged brand's real home -- a genuine look-alike domain that
+        isn't itself cataloged still triggers normally."""
+        sig = typosquat.evaluate("https://githup.com", self._brands(), max_edit_distance=2)
+        assert sig.triggered is True
+        assert sig.evidence["impersonated_brand"] == "GitHub"
+
+
 class TestGuards:
     def test_short_brand_name_is_skipped(self):
         """'Hp' is below the minimum brand-name length guard -- must never

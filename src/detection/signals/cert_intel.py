@@ -166,15 +166,38 @@ def evaluate(
             cert_age_days = (datetime.now(timezone.utc) - not_before).days
             is_fresh = cert_age_days < _FRESH_CERT_DAYS
 
-        hostname = registered_domain(visited_url) or ""
+        # The cert was captured on the FINAL hop of the redirect chain (see
+        # PageArtifacts.fetch: tls_cert is set from the response that also
+        # sets final_url), so it must be checked against the hostname the
+        # TLS handshake actually ran against (SNI) -- not the originally
+        # -requested `visited_url`. Those two differ whenever a redirect
+        # crosses hosts, e.g. https://mail.google.com/... unauthenticated ->
+        # 302 -> https://accounts.google.com/ServiceLogin: the peer cert is
+        # genuinely scoped to accounts.google.com only (SAN does not include
+        # mail.google.com), so comparing it against the pre-redirect
+        # hostname produced a spurious hostname_mismatch on a legitimate
+        # same-provider redirect. Every other page-dependent signal already
+        # falls back to final_url for the same reason (favicon_match,
+        # brand_mismatch, redirect_chain); cert_intel is the one signal
+        # where the final hop is authoritative, not just a fallback, since
+        # the cert was quite literally never issued for the pre-redirect host.
+        effective_url = page_artifacts.final_url or visited_url
+        hostname = registered_domain(effective_url) or ""
         parsed_host = ""
         try:
             from urllib.parse import urlparse
 
-            parsed_host = (urlparse(visited_url).hostname or "").lower()
+            parsed_host = (urlparse(effective_url).hostname or "").lower()
         except Exception:  # noqa: BLE001
             pass
-        covered = _hostname_covered(parsed_host or hostname, cert)
+        effective_hostname = parsed_host or hostname
+        covered = _hostname_covered(effective_hostname, cert)
+        logger.debug(
+            "cert_intel hostname check: visited=%r final=%r effective_hostname=%r "
+            "san=%r covered=%s",
+            visited_url, page_artifacts.final_url, effective_hostname,
+            cert.get("san"), covered,
+        )
 
         is_recently_registered = bool((html_features or {}).get("is_recently_registered"))
         has_corroborating_signal = any(s.triggered for s in (corroborators or []))
@@ -204,6 +227,7 @@ def evaluate(
                 "issuer_org": issuer_org or "unknown",
                 "is_free_ca": is_free_ca,
                 "hostname_covered": covered,
+                "effective_hostname": effective_hostname,
                 "axes_triggered": axes_triggered,
                 "domain_recently_registered": is_recently_registered,
                 "corroborated_by_other_signal": has_corroborating_signal,

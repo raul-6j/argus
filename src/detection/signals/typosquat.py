@@ -203,6 +203,20 @@ def evaluate(url: str, brand_index: "BrandIndex", max_edit_distance: int = 2) ->
         if not domain or not brand_index.brands:
             return _neutral(start)
 
+        # A domain that is itself the verified real domain of some OTHER
+        # cataloged brand cannot simultaneously be a typosquat of a
+        # different brand -- e.g. github.com ("github", 6-char root) sits
+        # at Damerau-Levenshtein distance 2 from GitLab's "gitlab" root,
+        # past the short-root guard below, and was flagged as impersonating
+        # GitLab. The per-brand `_is_own_domain` check further down only
+        # exempts a domain from the ONE brand entry it's being compared
+        # against; it never learns that the domain is independently
+        # verified as a different real brand's own home. This reuses the
+        # same brand-reference domain data already loaded for this
+        # signal -- domain-ownership corroboration, not a blind allowlist.
+        if brand_index.brand_for_domain(domain) is not None:
+            return _neutral(start)
+
         domain_labels = domain.split(".")
         decoded_domain = ".".join(_decode_punycode_label(lbl) for lbl in domain_labels)
         domain_root_raw = decoded_domain.split(".")[0]

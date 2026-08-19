@@ -152,6 +152,63 @@ class TestTriggeredCases:
         assert sig.triggered is False  # wildcard covers it -> no mismatch
 
 
+class TestRedirectHandling:
+    """A cert is captured on the FINAL hop of the redirect chain (see
+    PageArtifacts.fetch), so it must be checked against the hostname the
+    TLS handshake actually ran against -- not the originally-requested URL.
+    Reproduces the real-world false positive: an unauthenticated
+    https://mail.google.com/mail/u/0/ request 302s to
+    https://accounts.google.com/ServiceLogin, whose genuine Google Trust
+    Services cert is scoped to accounts.google.com only (no mail.google.com
+    SAN entry) -- checking it against the pre-redirect hostname produced a
+    spurious hostname_mismatch on a legitimate same-provider redirect."""
+
+    def test_same_provider_redirect_with_cert_covering_final_host_is_not_flagged(self):
+        cert = {
+            "subject": [[["commonName", "accounts.google.com"]]],
+            "issuer": [[["organizationName", "Google Trust Services"]]],
+            "not_before": _cert_date(60),
+            "san": ["accounts.google.com", "mtls.accounts.google.com"],
+        }
+        sig = cert_intel.evaluate(
+            _artifacts(cert, final_url="https://accounts.google.com/ServiceLogin?service=mail"),
+            "https://mail.google.com/mail/u/0/#inbox",
+            BrandIndex(),
+        )
+        assert sig.triggered is False
+        assert sig.evidence == {}
+
+    def test_redirect_target_genuinely_not_covered_by_cert_still_flags(self):
+        """A redirect landing on a host the cert genuinely doesn't cover
+        must still trigger -- the fix changes WHICH hostname is checked,
+        not whether a real mismatch is still caught."""
+        cert = {
+            "subject": [[["commonName", "somethingelse.com"]]],
+            "issuer": [[["organizationName", "DigiCert Inc"]]],
+            "not_before": _cert_date(400),
+            "san": ["somethingelse.com"],
+        }
+        sig = cert_intel.evaluate(
+            _artifacts(cert, final_url="https://attacker-final-hop.com"),
+            "https://mail.google.com/mail/u/0/#inbox",
+            BrandIndex(),
+        )
+        assert sig.triggered is True
+        assert "hostname_mismatch" in sig.evidence["axes_triggered"]
+        assert sig.evidence["effective_hostname"] == "attacker-final-hop.com"
+
+    def test_missing_final_url_falls_back_to_visited_url(self):
+        cert = {
+            "subject": [[["commonName", "example.com"]]],
+            "issuer": [[["organizationName", "DigiCert Inc"]]],
+            "not_before": _cert_date(400),
+            "san": ["example.com"],
+        }
+        artifacts = PageArtifacts(requested_url="x", final_url="", tls_cert=cert)
+        sig = cert_intel.evaluate(artifacts, "https://example.com", BrandIndex())
+        assert sig.triggered is False
+
+
 class TestRobustness:
     def test_unparseable_date_does_not_crash(self):
         cert = {
