@@ -1,5 +1,9 @@
 # ARGUS
 
+[![CI](https://github.com/raul-6j/argus/actions/workflows/ci.yml/badge.svg)](https://github.com/raul-6j/argus/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.9–3.12](https://img.shields.io/badge/python-3.9%E2%80%933.12-blue.svg)](https://www.python.org/)
+
 **A**utomated **R**eal-time **G**uard against **U**RL-based **S**cams — a real-time phishing website detection system using machine learning.
 
 Academic final-year project and production-quality portfolio piece.
@@ -9,6 +13,16 @@ Academic final-year project and production-quality portfolio piece.
 ARGUS extracts features from a URL (lexical, HTML, WHOIS, and network signals),
 runs them through a trained ML classifier, and returns a phishing/benign
 verdict with an explanation — exposed over a Flask API for real-time use.
+
+![ARGUS architecture](docs/images/architecture.png)
+
+Three surfaces share one detection core: a public web app, an MV3 browser
+extension (Chrome and Firefox from one source tree), and a versioned `/v1`
+developer API with a Python CLI and SDK.
+
+| Web app | Extension popup | Pre-navigation block |
+|---|---|---|
+| ![Web app](docs/images/webapp_index.png) | ![Popup](docs/images/popup.png) | ![Interstitial](docs/images/interstitial.png) |
 
 ## Stack
 
@@ -20,6 +34,61 @@ verdict with an explanation — exposed over a Flask API for real-time use.
 | DB       | SQLite (dev), PostgreSQL (prod)     |
 | Testing  | pytest + coverage                   |
 | Deploy   | Docker + Azure Container Apps       |
+
+## Results
+
+### Model selection
+
+Four classifiers were compared on a held-out test set touched exactly once
+(535 rows, UCI + Kaggle merged under an 18-feature contract). Selection rule:
+max F1, ROC-AUC as tie-break.
+
+| Model | F1 | ROC-AUC | Precision | Recall |
+|---|---:|---:|---:|---:|
+| **SVM** (selected) | **0.725** | 0.793 | 0.647 | 0.824 |
+| Decision Tree | 0.715 | 0.756 | 0.606 | 0.871 |
+| Random Forest | 0.710 | 0.800 | 0.639 | 0.797 |
+| Logistic Regression | 0.621 | 0.691 | 0.609 | 0.633 |
+
+| ROC comparison | SHAP feature attribution |
+|---|---|
+| ![ROC curves](docs/images/roc_curve_comparison.png) | ![SHAP beeswarm](docs/images/shap_summary_beeswarm.png) |
+
+### The finding that shaped the system
+
+Benchmark performance did not transfer. Measured against live phishing URLs
+sampled from a threat feed (200 sampled, 103 reachable, 30-URL control set):
+
+| | Model only | Model + detection fusion |
+|---|---:|---:|
+| Recall on live phishing | **0.000** | **0.883** |
+| False-positive rate | 0.000 | 0.130 |
+
+A classifier trained on a static benchmark scored 0.72 F1 in the lab and
+caught **none** of 103 live phishing pages. The gap is the point of the
+project, not an embarrassment to hide: benchmark features are quantised to
+`{-1, 0, 1}` and mostly unmeasurable on a live URL, so the model receives
+almost no real signal at inference time.
+
+What recovers detection is the fusion layer — eight independent signals
+(typosquatting, favicon/brand mismatch, certificate intelligence, redirect
+chains, credential context, platform risk, semantic content) combined with
+noisy-OR rather than a weighted mean. Recall by triggering signal:
+
+| Signal | n | Fused recall |
+|---|---:|---:|
+| typosquat | 91 | 1.000 |
+| brand_mismatch | 1 | 1.000 |
+| favicon_match | 1 | 1.000 |
+| cert_intel | 1 | 0.000 |
+| *no signal fired* | 11 | 0.000 |
+
+> **Provenance.** Model figures were produced by `scripts/evaluate.py` on
+> 2 July 2026; the live-URL figures by `scripts/eval_drift.py` on 7 August
+> 2026. Both predate the `FeatureAdapter` redesign, so they describe the
+> system as measured, not as currently committed. Re-run both before quoting
+> these numbers as current. The root-cause analysis behind the transfer gap
+> is kept with the written report rather than in this repository.
 
 ## Project Structure
 
@@ -153,4 +222,4 @@ These are referenced by number throughout the codebase (e.g. "Iron Law #5" in
 
 ## License
 
-Academic project — license TBD.
+Released under the [MIT License](LICENSE).

@@ -105,8 +105,21 @@ extension/node_modules/
 # NOTE: untracking removes them from future commits only. They remain in the
 # repository's existing history on GitHub and stay retrievable from earlier
 # commits; scrubbing them from history is a separate, force-push operation.
-docs/
+# docs/ is excluded wholesale EXCEPT the two things a public reader needs: the
+# endpoint reference and the figures the README embeds. Note the pattern must
+# be `docs/*`, not `docs/` -- git does not descend into an ignored *directory*,
+# so a `!docs/images/` negation under `docs/` would never be evaluated.
+docs/*
+!docs/API.md
+!docs/images/
 Report/
 reports/
 CLAUDE.md
 ARGUS_FEATURE_EXPANSION_ROADMAP.md
+
+# --- Presentation + viva material: local submission artefacts, not code ---
+# Kept out of the repo so a stray `git add -A` cannot commit ~3 MB of slide
+# decks and speaking notes (which is exactly what happened once).
+/*.pdf
+/*.pptx
+/*.docx
