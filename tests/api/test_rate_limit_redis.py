@@ -23,6 +23,32 @@ try:
 except ImportError:  # pragma: no cover - dev dependency, always installed per requirements.txt
     fakeredis = None
 
+
+def _await_redis_ready(port: int, timeout: float = 5.0) -> None:
+    """Block until the fake server actually answers PING on ``port``.
+
+    ``TcpFakeServer`` binds its socket in the constructor but only starts
+    accepting once ``serve_forever`` is running on its thread, so there is a
+    real window where a connection is refused or reset. A fixed
+    ``time.sleep`` guessed at that window and lost the race under load --
+    intermittently, the first request through flask-limiter saw a dead
+    backend and the app correctly failed closed with 503, failing a test
+    that expected 200. Poll for the condition instead of guessing at it.
+    """
+    deadline = time.monotonic() + timeout
+    last_error: Exception | None = None
+    while time.monotonic() < deadline:
+        client = redis.Redis(host="127.0.0.1", port=port, socket_connect_timeout=0.5)
+        try:
+            if client.ping():
+                return
+        except redis.exceptions.RedisError as exc:  # not yet accepting
+            last_error = exc
+            time.sleep(0.01)
+        finally:
+            client.close()
+    raise AssertionError(f"fakeredis on port {port} never became ready: {last_error!r}")
+
 pytestmark = pytest.mark.skipif(
     not _MODEL_PATH.is_file(), reason="Run scripts/train.py + scripts/evaluate.py first."
 )
@@ -39,7 +65,7 @@ def fake_redis_server():
     port = server.socket.getsockname()[1]
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
-    time.sleep(0.05)
+    _await_redis_ready(port)
     try:
         yield f"redis://127.0.0.1:{port}/0"
     finally:
@@ -162,7 +188,7 @@ class TestMidSessionRedisFailure:
         port = server.socket.getsockname()[1]
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
-        time.sleep(0.05)
+        _await_redis_ready(port)
 
         config_path = _write_config(
             tmp_path_factory, rate_limit_storage_uri=f"redis://127.0.0.1:{port}/0"

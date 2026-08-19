@@ -40,10 +40,16 @@ def test_explain_response_is_valid_json_with_missing_features(client):
     client's `fetch().json()` rejects, defeating the point of this
     regression guard."""
     fv = _fake_feature_vector("https://example.com", _LEGIT_RAW_FEATURES)
-    forced_missing = FEATURE_ORDER[0]
+    # Every feature is MISSING, not just one. /explain returns only the top 5
+    # by |SHAP| (explain.py's `attributions[:5]`), and the production model is
+    # an SVM, so attribution runs through SHAP's *stochastic* KernelExplainer.
+    # Forcing a single feature and then looking for it in the top 5 made the
+    # assertion depend on where that one feature happened to rank, which is
+    # not stable across runs. With all of them missing, whichever five surface
+    # must every one of them be null, so the guard holds regardless of ranking.
     model_input = ModelInput(
-        values={name: (MISSING if name == forced_missing else 0.0) for name in FEATURE_ORDER},
-        unavailable=[forced_missing],
+        values=dict.fromkeys(FEATURE_ORDER, MISSING),
+        unavailable=list(FEATURE_ORDER),
     )
     with mock.patch(f"{MODULE}.extract_features", return_value=fv), mock.patch(
         f"{MODULE}.page_artifacts.fetch", return_value=_FAILED_FETCH_ARTIFACTS
@@ -52,9 +58,9 @@ def test_explain_response_is_valid_json_with_missing_features(client):
     assert resp.status_code == 200
     raw_text = resp.get_data(as_text=True)
     assert "NaN" not in raw_text
-    body = resp.get_json()
-    forced_item = next(item for item in body["top5_features"] if item["feature"] == forced_missing)
-    assert forced_item["feature_value"] is None
+    top5 = resp.get_json()["top5_features"]
+    assert len(top5) == 5
+    assert all(item["feature_value"] is None for item in top5)
 
 
 def test_explain_ordered_by_abs_shap_descending(client):
