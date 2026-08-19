@@ -10,6 +10,16 @@
 # boosted-tree baseline is ever genuinely added to the comparison.
 scikit-learn==1.5.2
 shap==0.46.0
+# Ceiling, not a floor: shap 0.46.0 vendors an old skimage colour-conversion
+# module (shap/plots/colors/_colorconv.py) that calls the deprecated
+# `np.dtype(np.floating)` form. numpy turned that from a DeprecationWarning
+# into a hard TypeError starting in 2.3.0 -- found by a real `import shap`
+# crash on a fresh install, not by reading a changelog. Nothing else pinned
+# here (scikit-learn 1.5.2, pandas, onnxruntime 1.19.2) requires anything
+# newer than this, confirmed via `pip check`. Bump only alongside a shap
+# upgrade that has actually been verified not to change SHAP explanation
+# output (F5/F19's explainability surface is user-visible, not just internal).
+numpy<2.3
 matplotlib==3.9.4      # ROC curve + confusion matrix plots (Phase 5, Task 5.2)
 
 # --- Feature extraction ---
@@ -39,7 +49,16 @@ redis==7.0.1            # backs flask-limiter's storage_uri=redis://... (Phase 2
                          # the verdict cache (Phase 2, G1, src/serving/cache.py)
 
 # --- Testing (Phase 2 additions) ---
-fakeredis==2.36.2       # in-process Redis stand-in for G2/G1 tests -- no real Redis needed in CI
+# The `lua` extra (-> lupa, Lua-in-Python bindings) is not optional here: G2's
+# rate limiter goes through flask-limiter -> the `limits` library, which
+# implements its moving/fixed-window hit tracking as Lua scripts (EVAL/
+# EVALSHA) for atomicity. Bare `fakeredis` doesn't register those commands at
+# all, so every rate-limit check against it fails closed with "unknown
+# command 'evalsha'" -- indistinguishable from a real outage, since the app
+# correctly treats an unreachable-looking Redis as fail-closed (G2). Found by
+# a real hang/false-503 on a fresh install (tests/api/test_rate_limit_redis.py
+# ::TestMidSessionRedisFailure), not by reading fakeredis's changelog.
+fakeredis[lua]==2.36.2   # in-process Redis stand-in for G2/G1 tests -- no real Redis needed in CI
 
 # --- Model serving (Phase 2, G1) ---
 skl2onnx==1.20.0         # sklearn Pipeline -> ONNX export (scripts/export_onnx.py)

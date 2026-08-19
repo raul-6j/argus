@@ -4,11 +4,15 @@
 #   docker run --rm -p 5000:5000 -e SECRET_KEY="$(openssl rand -base64 32)" argus:latest
 #
 # python:3.10-slim matches the target this project has documented all along
-# (requirements.txt's header, and CLAUDE.md's "Docker target"). The CI matrix
-# is what actually verifies which interpreters the code runs on -- see
-# .github/workflows/ci.yml. The local venv is 3.9, which is also why
-# pyproject.toml pins ruff to py39; that pin has a concrete reason recorded in
-# the file (SQLAlchemy evaluates Mapped[...] annotations at runtime, so
+# (requirements.txt's header). The CI matrix is what actually verifies which
+# interpreters the code runs on -- see
+# .github/workflows/ci.yml (3.9-3.12; 3.12 is the ceiling because
+# onnxruntime==1.19.2 ships no cp313+ wheels). The local dev venv runs 3.12
+# (DEC-043) -- newer than this image on purpose, to get the longest security-
+# support runway available inside that ceiling, not to track the image
+# exactly. pyproject.toml still pins ruff's target-version to py39: CI still
+# tests 3.9, and that pin has a concrete, unrelated reason recorded in the
+# file (SQLAlchemy evaluates Mapped[...] annotations at runtime, so
 # `str | None` would raise TypeError on 3.9 even with postponed annotations).
 #
 # MODEL ARTEFACTS: create_app() refuses to start without
