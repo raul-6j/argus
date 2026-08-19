@@ -56,39 +56,54 @@ max F1, ROC-AUC as tie-break.
 
 ### The finding that shaped the system
 
-Benchmark performance did not transfer. Measured against live phishing URLs
-sampled from a threat feed (200 sampled, 103 reachable, 30-URL control set):
+Benchmark performance did not transfer. The drift harness
+(`scripts/eval_drift.py`) samples 200 URLs from a live phishing feed, scores
+whatever is still reachable, and scores a benign control set alongside it.
+Every run to date:
 
-| | Model only | Model + detection fusion |
-|---|---:|---:|
-| Recall on live phishing | **0.000** | **0.883** |
-| False-positive rate | 0.000 | 0.130 |
+| Run | Reachable | Model only | Model + fusion | FP rate | typosquat hits |
+|---|---:|---:|---:|---:|---:|
+| 16 Jul 2026 | 129 | 0.023 | 0.752 | 0.556 | 94 |
+| 16 Jul 2026 | 129 | 0.023 | 0.752 | 0.538 | 94 |
+| 23 Jul 2026 | 117 | 0.000 | 0.795 | 0.304 | 92 |
+| 7 Aug 2026 | 103 | 0.000 | 0.883 | 0.130 | 91 |
+| 19 Aug 2026 | 44 | 0.023 | 0.045 | 0.087 | 0 |
 
-A classifier trained on a static benchmark scored 0.72 F1 in the lab and
-caught **none** of 103 live phishing pages. The gap is the point of the
-project, not an embarrassment to hide: benchmark features are quantised to
-`{-1, 0, 1}` and mostly unmeasurable on a live URL, so the model receives
-almost no real signal at inference time.
+Two things are stable across every run; one is not.
 
-What recovers detection is the fusion layer — eight independent signals
-(typosquatting, favicon/brand mismatch, certificate intelligence, redirect
-chains, credential context, platform risk, semantic content) combined with
-noisy-OR rather than a weighted mean. Recall by triggering signal:
+**Stable — the model does not transfer.** Model-only recall never exceeds
+0.023 on live URLs, against 0.725 F1 on the held-out benchmark. Benchmark
+features are quantised to `{-1, 0, 1}` and 11 of 18 are unmeasurable on a
+live page, so the classifier receives almost no real signal at inference
+time. This is the project's central finding.
 
-| Signal | n | Fused recall |
-|---|---:|---:|
-| typosquat | 91 | 1.000 |
-| brand_mismatch | 1 | 1.000 |
-| favicon_match | 1 | 1.000 |
-| cert_intel | 1 | 0.000 |
-| *no signal fired* | 11 | 0.000 |
+**Stable — false positives fell steadily**, 0.556 to 0.087, as fusion moved
+from a weighted mean to noisy-OR and signals gained corroboration
+requirements.
 
-> **Provenance.** Model figures were produced by `scripts/evaluate.py` on
-> 2 July 2026; the live-URL figures by `scripts/eval_drift.py` on 7 August
-> 2026. Both predate the `FeatureAdapter` redesign, so they describe the
-> system as measured, not as currently committed. Re-run both before quoting
-> these numbers as current. The root-cause analysis behind the transfer gap
-> is kept with the written report rather than in this repository.
+**Not stable — fused recall tracks the threat mix, not the code.** The first
+four runs sampled one feed snapshot in which ~92 of every ~110 reachable URLs
+were typosquats of catalogued brands, and fusion caught essentially all of
+them. The 19 August run is the first against a *fresh* snapshot: typosquat
+fires zero times, and 43 of 44 reachable URLs trigger no signal at all.
+
+So the defensible claim is narrower than any single row above:
+
+> ARGUS detects **brand-impersonation** phishing well — typosquats, favicon
+> and logo matches, certificate mismatches, measured against a 166-brand
+> reference — and detects phishing that impersonates nothing at roughly the
+> rate the underlying classifier does, which is near zero. Measured "recall"
+> is therefore largely a function of how much of the sampled threat mix is
+> brand impersonation.
+
+That also names the next step: recall on live feeds is bounded by
+brand-reference coverage, so expanding the 166-brand catalogue is worth more
+than further model tuning.
+
+**Limitations.** Each run is one sample of 44–129 reachable URLs against a
+30-URL control set — wide confidence intervals, a single feed source, and
+reachability between 22% and 64% because phishing URLs die quickly. No single
+run should be quoted as *the* recall figure.
 
 ## Project Structure
 
