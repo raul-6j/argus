@@ -8,11 +8,13 @@ scripts/generate_shap_report.py, not re-tested here.
 
 from __future__ import annotations
 
+import math
+
 import joblib
 import pandas as pd
 import pytest
 
-from src.models.contract import FEATURE_ORDER
+from src.models.contract import FEATURE_ORDER, MISSING
 from src.models.explain import build_explainer, explain_single
 
 
@@ -68,3 +70,24 @@ def test_feature_value_matches_input(decision_tree_setup):
     result = explain_single(features, pipeline, explainer, "decision_tree")
     for item in result:
         assert item["feature_value"] == features[item["feature"]]
+
+
+def test_missing_feature_value_is_json_safe_none_not_nan(decision_tree_setup):
+    """A missing feature is NaN in the model contract (DEC-040), which is
+    exactly right for the imputer -- but `jsonify` emits a bare `NaN` token
+    for it, which is not valid JSON and breaks every strict JSON.parse
+    caller (every browser's `Response.json()`, including this project's own
+    extension/webapp clients). `explain_single` must never hand a raw NaN
+    back to an API caller."""
+    pipeline, explainer, features = decision_tree_setup
+    features = dict(features)
+    missing_name = FEATURE_ORDER[0]
+    features[missing_name] = MISSING
+    result = explain_single(features, pipeline, explainer, "decision_tree")
+    for item in result:
+        if item["feature"] == missing_name:
+            assert item["feature_value"] is None
+        else:
+            assert not (
+                isinstance(item["feature_value"], float) and math.isnan(item["feature_value"])
+            )

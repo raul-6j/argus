@@ -111,6 +111,28 @@ describe("explain", () => {
     const result = await explain("https://example.com/x");
     expect(result.top5_features).toHaveLength(1);
   });
+
+  it("throws instead of silently returning {} when a 2xx response body fails to parse", async () => {
+    // A real ARGUS bug (fixed server-side, DEC-044): jsonify used to emit a
+    // bare `NaN` token for a missing SHAP feature_value, which is valid
+    // Python json.dumps output but NOT valid JSON per spec -- Response.json()
+    // rejects it. apiRequest used to swallow that parse failure into `{}`
+    // for ANY 2xx response, which the popup's "Why?" handler then read
+    // `.top5_features` off of, crashing on `undefined.map()` with a generic
+    // TypeError instead of a useful message. This is the client-side half of
+    // that fix: a malformed 2xx body must surface as a clear, catchable error.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => {
+          throw new SyntaxError("Unexpected token N in JSON at position 42");
+        },
+      })
+    );
+
+    await expect(explain("https://example.com/x")).rejects.toThrow("malformed response");
+  });
 });
 
 describe("deepScan", () => {

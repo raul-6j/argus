@@ -23,7 +23,7 @@ import numpy as np
 import shap
 from sklearn.pipeline import Pipeline
 
-from src.models.contract import FEATURE_ORDER
+from src.models.contract import FEATURE_ORDER, is_missing
 
 # Tree models get the fast, exact TreeExplainer; everything else falls back
 # to KernelExplainer against the pipeline's predict_proba (model-agnostic).
@@ -116,8 +116,24 @@ def explain_single(
     x = np.array([[features[name] for name in FEATURE_ORDER]], dtype=float)
     shap_values = _phishing_class_shap_values(explainer, model_type, x)[0]
 
+    # A missing/unmeasurable feature is NaN in the model contract (DEC-040) --
+    # correct for the imputer, but `json.dumps`/Flask's `jsonify` emits a bare
+    # `NaN` token for it, which is not valid JSON (only RFC 8259's `null` is).
+    # A strict JSON.parse (every browser's `Response.json()`, including this
+    # API's own extension/webapp clients) throws on that token, which took
+    # down the *entire* /explain response, not just this one field -- found
+    # live via the extension's "Why?" button surfacing a raw
+    # "Cannot read properties of undefined (reading 'map')" instead of an
+    # explanation, because the caller's `resp.json()` failed to parse and a
+    # `.catch()` silently substituted `{}`. Emit `None` (-> JSON `null`)
+    # instead; the ML pipeline itself is untouched, since this only affects
+    # the human/API-facing copy of the value returned here.
     attributions = [
-        {"feature": name, "shap_value": float(shap_values[i]), "feature_value": features[name]}
+        {
+            "feature": name,
+            "shap_value": float(shap_values[i]),
+            "feature_value": None if is_missing(features[name]) else features[name],
+        }
         for i, name in enumerate(FEATURE_ORDER)
     ]
     attributions.sort(key=lambda a: abs(a["shap_value"]), reverse=True)

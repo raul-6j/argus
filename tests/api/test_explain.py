@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest import mock
 
 from src.features.page_artifacts import PageArtifacts
+from src.models.contract import FEATURE_ORDER, MISSING, ModelInput
 from tests.api.test_detect import _FAILED_FETCH_ARTIFACTS, _LEGIT_RAW_FEATURES, _fake_feature_vector
 
 MODULE = "src.api.verdict"  # the shared extraction seam these tests patch
@@ -23,6 +24,37 @@ def test_explain_returns_top5(client):
     assert "latency_ms" in body
     for item in body["top5_features"]:
         assert set(item.keys()) == {"feature", "shap_value", "feature_value"}
+
+
+def test_explain_response_is_valid_json_with_missing_features(client):
+    """A feature the live extractor genuinely couldn't measure is NaN in the
+    model contract's ``MISSING`` sentinel (DEC-040) -- correct for the
+    pipeline's imputer, but `jsonify` used to emit that as a bare `NaN`
+    token, which is not valid JSON and breaks any strict JSON.parse caller
+    (every browser, including this project's own extension -- found live
+    via the popup's "Why?" button crashing on it). Forces a MISSING value
+    via a patched adapter (rather than relying on a specific raw-feature
+    fixture happening to produce one) and asserts on the raw response
+    bytes, not `get_json()` -- Python's own `json` module is lenient about
+    `NaN` by default and would silently accept the very token a real
+    client's `fetch().json()` rejects, defeating the point of this
+    regression guard."""
+    fv = _fake_feature_vector("https://example.com", _LEGIT_RAW_FEATURES)
+    forced_missing = FEATURE_ORDER[0]
+    model_input = ModelInput(
+        values={name: (MISSING if name == forced_missing else 0.0) for name in FEATURE_ORDER},
+        unavailable=[forced_missing],
+    )
+    with mock.patch(f"{MODULE}.extract_features", return_value=fv), mock.patch(
+        f"{MODULE}.page_artifacts.fetch", return_value=_FAILED_FETCH_ARTIFACTS
+    ), mock.patch("src.api.detect.adapt_to_training_contract", return_value=model_input):
+        resp = client.post("/explain", json={"url": "https://example.com"})
+    assert resp.status_code == 200
+    raw_text = resp.get_data(as_text=True)
+    assert "NaN" not in raw_text
+    body = resp.get_json()
+    forced_item = next(item for item in body["top5_features"] if item["feature"] == forced_missing)
+    assert forced_item["feature_value"] is None
 
 
 def test_explain_ordered_by_abs_shap_descending(client):
