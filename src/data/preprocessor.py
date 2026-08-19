@@ -472,7 +472,7 @@ def stratified_split(
         train_ratio: Fraction for training set.
         val_ratio: Fraction for validation set.
         test_ratio: Fraction for test set.
-        random_state: Random seed for reproducibility (always 42 per CLAUDE.md).
+        random_state: Random seed for reproducibility (always 42, per Iron Law #6).
 
     Returns:
         Tuple of (train_df, val_df, test_df).

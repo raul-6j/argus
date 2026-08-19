@@ -5,7 +5,7 @@ and the authenticated history endpoint (``GET /scan/history/<id>/export``) —
 both already have the full report dict in hand (nothing new is fetched or
 computed here, purely re-serialization of already-stored data). Because of
 that, these exports don't carry a ``latency_ms`` field the way live detection
-endpoints must (see CLAUDE.md's iron laws): there's no inference/enrichment
+endpoints must (see README.md's Conventions): there's no inference/enrichment
 work happening, so a timing figure would be meaningless noise in a downloaded
 report.
 """

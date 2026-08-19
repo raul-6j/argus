@@ -41,7 +41,7 @@ _DEFAULT_CONFIG_PATH = (
     Path(__file__).resolve().parents[2] / "configs" / "feature_config.yaml"
 )
 
-# Optional HTML fetch limits (CLAUDE.md gotcha: always bound slow I/O).
+# Optional HTML fetch limits (always bound slow I/O).
 _FETCH_TIMEOUT: float = 5.0
 _FETCH_HEADERS = {"User-Agent": "ARGUS-FeatureBot/0.1 (+phishing-detection)"}
 # Cap the response body to avoid memory exhaustion from a hostile page.

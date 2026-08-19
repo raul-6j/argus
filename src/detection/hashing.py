@@ -3,7 +3,7 @@
 Deliberately dependency-light: MurmurHash3 (x86, 32-bit) is reimplemented
 directly rather than adding the ``mmh3`` compiled-extension package — it is
 a small, fully-specified algorithm, and the project already keeps
-``requirements.txt`` minimal (see CLAUDE.md). :func:`mmh3_32` matches the
+``requirements.txt`` minimal. :func:`mmh3_32` matches the
 conventional "Shodan favicon hash" usage:
 ``mmh3_32(base64.b64encode(favicon_bytes))``.
 

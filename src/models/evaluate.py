@@ -213,11 +213,6 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="Evaluate the ARGUS 4-model comparison on the test set.")
     parser.add_argument("--config", type=Path, default=PROJECT_ROOT / "configs" / "model_config.yaml")
-    parser.add_argument(
-        "--model-path", type=Path, default=None,
-        help="Unused placeholder for CLAUDE.md's documented invocation; evaluate.py always "
-             "evaluates all configured candidates and writes to models/production/.",
-    )
     args = parser.parse_args()
 
     with args.config.open() as fh:

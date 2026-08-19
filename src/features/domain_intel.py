@@ -48,7 +48,7 @@ RECENT_REGISTRATION_DAYS: int = 30
 DEFAULT_MAX_WORKERS: int = 8
 
 # Per-domain WHOIS result cache (Phase 6, Task 6.2). WHOIS is the slowest,
-# most rate-limit-sensitive lookup (CLAUDE.md gotcha: 500ms+), and the same
+# most rate-limit-sensitive lookup (500ms+ is typical), and the same
 # domain is often requested repeatedly in a short window (e.g. many URLs on
 # the same phishing-kit host). Registration data changes rarely, so a 6-hour
 # TTL trades a small amount of staleness for a large reduction in WHOIS

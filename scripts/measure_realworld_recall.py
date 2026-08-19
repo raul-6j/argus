@@ -52,7 +52,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger("measure_realworld_recall")
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
-_RANDOM_SEED = 42  # reproducibility, per CLAUDE.md Iron Law #6
+_RANDOM_SEED = 42  # reproducibility, per Iron Law #6
 
 
 def _load_active_prefilter_urls(threat_intel_config_path: Path) -> set[str]:

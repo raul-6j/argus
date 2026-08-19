@@ -5,9 +5,9 @@ used to distinguish phishing pages from legitimate ones. No network I/O is
 performed here — fetching is the caller's responsibility.
 
 Parsing uses BeautifulSoup with the ``lxml`` parser, which is faster and far
-more tolerant of malformed markup than the stdlib ``html.parser`` (see
-CLAUDE.md gotchas). Every feature is computed defensively: a failure in one
-field sets only that field to ``None``; unusable input or a total parse failure
+more tolerant of malformed markup than the stdlib ``html.parser``. Every
+feature is computed defensively: a failure in one field sets only that field
+to ``None``; unusable input or a total parse failure
 yields an all-``None`` dict.
 
 Example:

@@ -27,8 +27,8 @@ from src.utils.ttl_cache import TtlCache
 logger = logging.getLogger(__name__)
 
 # Bounds the GSB HTTP call the same way _connect_redis_or_fail/domain_intel's
-# WHOIS lookups are bounded elsewhere in this project (CLAUDE.md gotcha: a
-# third-party network dependency with no explicit timeout can hang every
+# WHOIS lookups are bounded elsewhere in this project: a third-party network
+# dependency with no explicit timeout can hang every
 # request indefinitely, not just fail it -- found the hard way with Redis in
 # Phase 2, DEC-027). This module is on /detect's hot path, so 3s is a firm
 # ceiling, not a generous one.

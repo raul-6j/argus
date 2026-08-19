@@ -22,7 +22,7 @@ design reference; every file in this directory is original.
 
 ## Setup
 
-1. Train a model and start the API first (see the repo root `CLAUDE.md`):
+1. Train a model and start the API first (see the repo root `README.md`):
    ```bash
    venv/bin/python scripts/train.py --config configs/model_config.yaml
    venv/bin/python scripts/evaluate.py --config configs/model_config.yaml

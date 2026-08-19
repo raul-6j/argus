@@ -15,7 +15,7 @@ verdict with an explanation — exposed over a Flask API for real-time use.
 | Layer    | Technology                          |
 |----------|-------------------------------------|
 | Language | Python 3.10+                        |
-| ML       | scikit-learn, XGBoost, LightGBM, SHAP |
+| ML       | scikit-learn (Decision Tree, Random Forest, Logistic Regression, SVM), SHAP |
 | API      | Flask 3.0 (Blueprints)              |
 | DB       | SQLite (dev), PostgreSQL (prod)     |
 | Testing  | pytest + coverage                   |
@@ -134,13 +134,22 @@ Three things to get right in a real deployment:
 Docker build. The CI job summary reports how many tests were **skipped**,
 because a fresh checkout has no model and cannot run the API tests.
 
-## Conventions
+## Conventions — Iron Laws
 
-The project follows strict "Iron Laws": structured logging only (no
-`print()`), `pathlib`-based paths (no hardcoded paths), every feature
-extractor returns `None` rather than raising, `latency_ms` in every API
-response, no serialized models in git, and `random_state=42` everywhere for
-reproducibility.
+These are referenced by number throughout the codebase (e.g. "Iron Law #5" in
+`.gitignore`), so they are recorded here rather than in a contributor's notes:
+
+1. **No `print()` in `src/`** — structured logging only.
+2. **No hardcoded paths** — `pathlib.Path` plus config files.
+3. **Every feature extractor handles its own exceptions** and returns `None` on
+   failure; one bad field never fails a whole extraction.
+4. **Every API endpoint returns `latency_ms`** in its JSON response.
+5. **Never commit serialized models** (`.pkl`, `.joblib`, `.onnx`).
+6. **All ML experiments are reproducible** — `random_state=42` everywhere.
+7. **Type hints on all functions**, docstrings on all public functions.
+8. **No hardcoded colours, radii, font sizes or spacing** in front-end code —
+   use the design tokens in `webapp/style.css` and
+   `extension/lib/argus-ui.css`.
 
 ## License
 

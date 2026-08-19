@@ -3,7 +3,7 @@
 Centralizes the single ``TLDExtract`` instance used across feature extractors so
 that:
 
-    * the cache dir is set once (CLAUDE.md gotcha), and
+    * the cache dir is set once, and
     * extraction is **offline** — ``suffix_list_urls=()`` forces tldextract to
       use only its bundled public-suffix snapshot, never an HTTP fetch on a cold
       cache. This keeps the lexical tier's "no network I/O" guarantee honest.
