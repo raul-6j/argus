@@ -61,13 +61,23 @@ Benchmark performance did not transfer. The drift harness
 whatever is still reachable, and scores a benign control set alongside it.
 Every run to date:
 
-| Run | Reachable | Model only | Model + fusion | FP rate | typosquat hits |
-|---|---:|---:|---:|---:|---:|
-| 16 Jul 2026 | 129 | 0.023 | 0.752 | 0.556 | 94 |
-| 16 Jul 2026 | 129 | 0.023 | 0.752 | 0.538 | 94 |
-| 23 Jul 2026 | 117 | 0.000 | 0.795 | 0.304 | 92 |
-| 7 Aug 2026 | 103 | 0.000 | 0.883 | 0.130 | 91 |
-| 19 Aug 2026 | 44 | 0.023 | 0.045 | 0.087 | 0 |
+| Run | Feed | Reachable | Model only | Model + fusion | FP rate | typosquat hits |
+|---|---|---:|---:|---:|---:|---:|
+| 16 Jul 2026 | Jul | 129 | 0.023 | 0.752 | 0.556 | 94 |
+| 16 Jul 2026 | Jul | 129 | 0.023 | 0.752 | 0.538 | 94 |
+| 23 Jul 2026 | Jul | 117 | 0.000 | 0.795 | 0.304 | 92 |
+| 7 Aug 2026 | Jul | 103 | 0.000 | 0.883 | 0.130 | 91 |
+| 19 Aug 2026 | **Aug** | 44 | 0.023 | **0.045** | 0.087 | 0 |
+| 19 Aug 2026 | Jul | 98 | 0.000 | **0.929** | 0.042 | 91 |
+
+The last two rows are the same code against different feed snapshots, and
+the 4th and 6th are the same feed against different code. Read together they
+separate the two effects cleanly:
+
+* **Code, held feed constant** (7 Aug → 19 Aug on the July snapshot): recall
+  0.883 → 0.929, false positives 0.130 → 0.042. Both improved.
+* **Feed, held code constant** (19 Aug, July vs August snapshot): recall
+  0.929 → 0.045. Nothing about the system changed between those two numbers.
 
 Two things are stable across every run; one is not.
 
@@ -77,15 +87,15 @@ features are quantised to `{-1, 0, 1}` and 11 of 18 are unmeasurable on a
 live page, so the classifier receives almost no real signal at inference
 time. This is the project's central finding.
 
-**Stable — false positives fell steadily**, 0.556 to 0.087, as fusion moved
-from a weighted mean to noisy-OR and signals gained corroboration
-requirements.
+**Stable — false positives fell steadily**, 0.556 to 0.042 on the same feed,
+as fusion moved from a weighted mean to noisy-OR and signals gained
+corroboration requirements.
 
-**Not stable — fused recall tracks the threat mix, not the code.** The first
-four runs sampled one feed snapshot in which ~92 of every ~110 reachable URLs
-were typosquats of catalogued brands, and fusion caught essentially all of
-them. The 19 August run is the first against a *fresh* snapshot: typosquat
-fires zero times, and 43 of 44 reachable URLs trigger no signal at all.
+**Not stable — fused recall tracks the threat mix.** Five runs against the
+July snapshot each saw ~91–94 typosquats of catalogued brands and caught
+nearly all of them. The August snapshot contains none: typosquat fires zero
+times and 43 of 44 reachable URLs trigger no signal at all. The controlled
+comparison above rules out any code change as the cause.
 
 So the defensible claim is narrower than any single row above:
 
